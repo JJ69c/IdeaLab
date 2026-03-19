@@ -1,0 +1,514 @@
+{
+  "npcs": [
+    {
+      "id": "npc_001",
+      "name": "Maya Chen",
+      "age": 29,
+      "occupation": "UX Designer",
+      "income_level": "middle",
+      "personality": {
+        "openness": 0.85, "skepticism": 0.3, "tech_savviness": 0.9,
+        "price_sensitivity": 0.5, "social_influence": 0.7, "conformity": 0.35, "novelty_seeking": 0.88
+      },
+      "interests": ["design tools", "productivity apps", "wellness", "social media"],
+      "values": ["creativity", "efficiency", "aesthetics"],
+      "pain_points": ["too many subscriptions", "context switching between apps"],
+      "communication_style": "enthusiastic but analytical",
+      "social_connections": ["npc_002", "npc_005", "npc_008", "npc_012"],
+      "trust_weights": {"npc_002": 0.9, "npc_005": 0.7, "npc_008": 0.6, "npc_012": 0.8}
+    },
+    {
+      "id": "npc_002",
+      "name": "David Park",
+      "age": 34,
+      "occupation": "Software Engineer",
+      "income_level": "upper_middle",
+      "personality": {
+        "openness": 0.7, "skepticism": 0.75, "tech_savviness": 0.95,
+        "price_sensitivity": 0.3, "social_influence": 0.5, "conformity": 0.2, "novelty_seeking": 0.65
+      },
+      "interests": ["open source", "programming languages", "gaming", "home automation"],
+      "values": ["privacy", "craftsmanship", "efficiency"],
+      "pain_points": ["vendor lock-in", "bloated software", "privacy invasions"],
+      "communication_style": "direct, detail-oriented, questions everything",
+      "social_connections": ["npc_001", "npc_003", "npc_010", "npc_015"],
+      "trust_weights": {"npc_001": 0.85, "npc_003": 0.7, "npc_010": 0.6, "npc_015": 0.5}
+    },
+    {
+      "id": "npc_003",
+      "name": "Sarah Johnson",
+      "age": 42,
+      "occupation": "Marketing Director",
+      "income_level": "upper_middle",
+      "personality": {
+        "openness": 0.6, "skepticism": 0.55, "tech_savviness": 0.6,
+        "price_sensitivity": 0.4, "social_influence": 0.85, "conformity": 0.5, "novelty_seeking": 0.5
+      },
+      "interests": ["brand strategy", "leadership", "wine", "podcasts"],
+      "values": ["results", "teamwork", "reputation"],
+      "pain_points": ["proving ROI", "too many meetings", "team alignment"],
+      "communication_style": "polished, persuasive, ROI-focused",
+      "social_connections": ["npc_002", "npc_004", "npc_006", "npc_009", "npc_018"],
+      "trust_weights": {"npc_002": 0.6, "npc_004": 0.85, "npc_006": 0.7, "npc_009": 0.75, "npc_018": 0.5}
+    },
+    {
+      "id": "npc_004",
+      "name": "James Wright",
+      "age": 51,
+      "occupation": "Small Business Owner (Restaurant)",
+      "income_level": "middle",
+      "personality": {
+        "openness": 0.35, "skepticism": 0.8, "tech_savviness": 0.3,
+        "price_sensitivity": 0.85, "social_influence": 0.6, "conformity": 0.6, "novelty_seeking": 0.2
+      },
+      "interests": ["cooking", "local community", "sports", "family"],
+      "values": ["reliability", "tradition", "value for money"],
+      "pain_points": ["rising costs", "complicated technology", "staffing"],
+      "communication_style": "plain-spoken, practical, skeptical of trends",
+      "social_connections": ["npc_003", "npc_007", "npc_011", "npc_020"],
+      "trust_weights": {"npc_003": 0.8, "npc_007": 0.9, "npc_011": 0.7, "npc_020": 0.75}
+    },
+    {
+      "id": "npc_005",
+      "name": "Aisha Patel",
+      "age": 24,
+      "occupation": "Graduate Student (Computer Science)",
+      "income_level": "low",
+      "personality": {
+        "openness": 0.9, "skepticism": 0.4, "tech_savviness": 0.85,
+        "price_sensitivity": 0.9, "social_influence": 0.45, "conformity": 0.3, "novelty_seeking": 0.92
+      },
+      "interests": ["AI/ML", "hackathons", "sustainability", "anime"],
+      "values": ["learning", "innovation", "social impact"],
+      "pain_points": ["student budget", "information overload", "imposter syndrome"],
+      "communication_style": "curious, eager, shares everything interesting she finds",
+      "social_connections": ["npc_001", "npc_010", "npc_013", "npc_016"],
+      "trust_weights": {"npc_001": 0.75, "npc_010": 0.8, "npc_013": 0.85, "npc_016": 0.6}
+    },
+    {
+      "id": "npc_006",
+      "name": "Robert Kim",
+      "age": 38,
+      "occupation": "Financial Analyst",
+      "income_level": "upper_middle",
+      "personality": {
+        "openness": 0.45, "skepticism": 0.85, "tech_savviness": 0.7,
+        "price_sensitivity": 0.35, "social_influence": 0.55, "conformity": 0.65, "novelty_seeking": 0.3
+      },
+      "interests": ["investing", "data analysis", "golf", "economics"],
+      "values": ["security", "accuracy", "ROI"],
+      "pain_points": ["hype over substance", "poor data quality", "regulatory compliance"],
+      "communication_style": "analytical, numbers-driven, needs proof",
+      "social_connections": ["npc_003", "npc_009", "npc_014"],
+      "trust_weights": {"npc_003": 0.7, "npc_009": 0.8, "npc_014": 0.6}
+    },
+    {
+      "id": "npc_007",
+      "name": "Linda Torres",
+      "age": 47,
+      "occupation": "School Teacher",
+      "income_level": "lower_middle",
+      "personality": {
+        "openness": 0.55, "skepticism": 0.5, "tech_savviness": 0.4,
+        "price_sensitivity": 0.8, "social_influence": 0.65, "conformity": 0.7, "novelty_seeking": 0.35
+      },
+      "interests": ["education", "reading", "gardening", "community events"],
+      "values": ["education", "community", "fairness"],
+      "pain_points": ["limited school budgets", "screen time concerns", "burnout"],
+      "communication_style": "warm, thoughtful, focused on practical impact",
+      "social_connections": ["npc_004", "npc_011", "npc_017", "npc_020"],
+      "trust_weights": {"npc_004": 0.85, "npc_011": 0.8, "npc_017": 0.7, "npc_020": 0.75}
+    },
+    {
+      "id": "npc_008",
+      "name": "Alex Rivera",
+      "age": 26,
+      "occupation": "Content Creator / Freelancer",
+      "income_level": "variable",
+      "personality": {
+        "openness": 0.92, "skepticism": 0.2, "tech_savviness": 0.75,
+        "price_sensitivity": 0.7, "social_influence": 0.8, "conformity": 0.15, "novelty_seeking": 0.95
+      },
+      "interests": ["social media", "video production", "travel", "fashion"],
+      "values": ["authenticity", "self-expression", "freedom"],
+      "pain_points": ["inconsistent income", "algorithm changes", "creative burnout"],
+      "communication_style": "energetic, trend-aware, shares opinions widely",
+      "social_connections": ["npc_001", "npc_013", "npc_016", "npc_019", "npc_022"],
+      "trust_weights": {"npc_001": 0.7, "npc_013": 0.65, "npc_016": 0.8, "npc_019": 0.7, "npc_022": 0.6}
+    },
+    {
+      "id": "npc_009",
+      "name": "Catherine Zhao",
+      "age": 36,
+      "occupation": "Product Manager",
+      "income_level": "upper_middle",
+      "personality": {
+        "openness": 0.75, "skepticism": 0.6, "tech_savviness": 0.8,
+        "price_sensitivity": 0.4, "social_influence": 0.7, "conformity": 0.4, "novelty_seeking": 0.7
+      },
+      "interests": ["product strategy", "user research", "running", "board games"],
+      "values": ["user-centricity", "data-driven decisions", "impact"],
+      "pain_points": ["stakeholder alignment", "scope creep", "measuring outcomes"],
+      "communication_style": "structured, evidence-based, asks great questions",
+      "social_connections": ["npc_003", "npc_006", "npc_012", "npc_015"],
+      "trust_weights": {"npc_003": 0.75, "npc_006": 0.7, "npc_012": 0.8, "npc_015": 0.65}
+    },
+    {
+      "id": "npc_010",
+      "name": "Marcus Thompson",
+      "age": 31,
+      "occupation": "DevOps Engineer",
+      "income_level": "upper_middle",
+      "personality": {
+        "openness": 0.6, "skepticism": 0.7, "tech_savviness": 0.92,
+        "price_sensitivity": 0.45, "social_influence": 0.4, "conformity": 0.25, "novelty_seeking": 0.55
+      },
+      "interests": ["infrastructure", "Linux", "mechanical keyboards", "coffee"],
+      "values": ["reliability", "automation", "simplicity"],
+      "pain_points": ["on-call fatigue", "unnecessary complexity", "poor documentation"],
+      "communication_style": "terse, pragmatic, values working solutions over ideas",
+      "social_connections": ["npc_002", "npc_005", "npc_015"],
+      "trust_weights": {"npc_002": 0.8, "npc_005": 0.65, "npc_015": 0.75}
+    },
+    {
+      "id": "npc_011",
+      "name": "Patricia Okonkwo",
+      "age": 55,
+      "occupation": "Nurse Practitioner",
+      "income_level": "middle",
+      "personality": {
+        "openness": 0.5, "skepticism": 0.65, "tech_savviness": 0.35,
+        "price_sensitivity": 0.6, "social_influence": 0.7, "conformity": 0.55, "novelty_seeking": 0.3
+      },
+      "interests": ["health", "family", "church community", "cooking"],
+      "values": ["care", "evidence-based practice", "community"],
+      "pain_points": ["healthcare bureaucracy", "misinformation", "work-life balance"],
+      "communication_style": "caring, measured, trusts evidence and personal experience",
+      "social_connections": ["npc_004", "npc_007", "npc_020", "npc_023"],
+      "trust_weights": {"npc_004": 0.7, "npc_007": 0.85, "npc_020": 0.8, "npc_023": 0.75}
+    },
+    {
+      "id": "npc_012",
+      "name": "Jason Lee",
+      "age": 33,
+      "occupation": "Startup Founder",
+      "income_level": "variable",
+      "personality": {
+        "openness": 0.88, "skepticism": 0.45, "tech_savviness": 0.82,
+        "price_sensitivity": 0.55, "social_influence": 0.75, "conformity": 0.2, "novelty_seeking": 0.85
+      },
+      "interests": ["entrepreneurship", "venture capital", "productivity", "biohacking"],
+      "values": ["growth", "disruption", "speed"],
+      "pain_points": ["fundraising", "hiring", "finding product-market fit"],
+      "communication_style": "visionary, moves fast, always looking for the next thing",
+      "social_connections": ["npc_001", "npc_009", "npc_015", "npc_019"],
+      "trust_weights": {"npc_001": 0.75, "npc_009": 0.8, "npc_015": 0.6, "npc_019": 0.7}
+    },
+    {
+      "id": "npc_013",
+      "name": "Zoe Martinez",
+      "age": 22,
+      "occupation": "College Student (Business)",
+      "income_level": "low",
+      "personality": {
+        "openness": 0.82, "skepticism": 0.25, "tech_savviness": 0.7,
+        "price_sensitivity": 0.92, "social_influence": 0.55, "conformity": 0.6, "novelty_seeking": 0.88
+      },
+      "interests": ["social media", "side hustles", "fitness", "music"],
+      "values": ["social status", "experiences", "affordability"],
+      "pain_points": ["money", "FOMO", "career uncertainty"],
+      "communication_style": "casual, social, influenced by peers and influencers",
+      "social_connections": ["npc_005", "npc_008", "npc_016", "npc_022"],
+      "trust_weights": {"npc_005": 0.8, "npc_008": 0.85, "npc_016": 0.75, "npc_022": 0.7}
+    },
+    {
+      "id": "npc_014",
+      "name": "William Foster",
+      "age": 62,
+      "occupation": "Retired Engineer",
+      "income_level": "upper_middle",
+      "personality": {
+        "openness": 0.4, "skepticism": 0.8, "tech_savviness": 0.5,
+        "price_sensitivity": 0.5, "social_influence": 0.45, "conformity": 0.6, "novelty_seeking": 0.2
+      },
+      "interests": ["woodworking", "history", "grandchildren", "news"],
+      "values": ["quality", "durability", "proven solutions"],
+      "pain_points": ["overly complex technology", "planned obsolescence", "data privacy"],
+      "communication_style": "measured, experienced, compares everything to 'how it used to be'",
+      "social_connections": ["npc_006", "npc_011", "npc_020"],
+      "trust_weights": {"npc_006": 0.7, "npc_011": 0.75, "npc_020": 0.8}
+    },
+    {
+      "id": "npc_015",
+      "name": "Priya Sharma",
+      "age": 30,
+      "occupation": "Data Scientist",
+      "income_level": "upper_middle",
+      "personality": {
+        "openness": 0.72, "skepticism": 0.68, "tech_savviness": 0.9,
+        "price_sensitivity": 0.4, "social_influence": 0.5, "conformity": 0.35, "novelty_seeking": 0.7
+      },
+      "interests": ["machine learning", "statistics", "hiking", "cooking"],
+      "values": ["evidence", "clarity", "impact"],
+      "pain_points": ["unrealistic expectations about AI", "messy data", "meeting overload"],
+      "communication_style": "precise, evidence-driven, asks for data before forming opinions",
+      "social_connections": ["npc_002", "npc_009", "npc_010", "npc_012"],
+      "trust_weights": {"npc_002": 0.75, "npc_009": 0.7, "npc_010": 0.8, "npc_012": 0.55}
+    },
+    {
+      "id": "npc_016",
+      "name": "Tyler Brooks",
+      "age": 21,
+      "occupation": "Gig Worker / Aspiring Musician",
+      "income_level": "low",
+      "personality": {
+        "openness": 0.88, "skepticism": 0.2, "tech_savviness": 0.65,
+        "price_sensitivity": 0.95, "social_influence": 0.4, "conformity": 0.45, "novelty_seeking": 0.9
+      },
+      "interests": ["music production", "TikTok", "gaming", "thrifting"],
+      "values": ["self-expression", "authenticity", "affordability"],
+      "pain_points": ["money", "visibility", "hustle culture burnout"],
+      "communication_style": "informal, expressive, reacts emotionally first",
+      "social_connections": ["npc_005", "npc_008", "npc_013", "npc_022"],
+      "trust_weights": {"npc_005": 0.65, "npc_008": 0.85, "npc_013": 0.8, "npc_022": 0.7}
+    },
+    {
+      "id": "npc_017",
+      "name": "Helen Nakamura",
+      "age": 44,
+      "occupation": "Architect",
+      "income_level": "upper_middle",
+      "personality": {
+        "openness": 0.7, "skepticism": 0.55, "tech_savviness": 0.6,
+        "price_sensitivity": 0.35, "social_influence": 0.6, "conformity": 0.45, "novelty_seeking": 0.55
+      },
+      "interests": ["design", "sustainability", "travel", "art"],
+      "values": ["beauty", "sustainability", "function"],
+      "pain_points": ["project delays", "budget constraints", "client indecision"],
+      "communication_style": "visual thinker, appreciates design, values both form and function",
+      "social_connections": ["npc_007", "npc_021", "npc_024"],
+      "trust_weights": {"npc_007": 0.7, "npc_021": 0.75, "npc_024": 0.65}
+    },
+    {
+      "id": "npc_018",
+      "name": "Derek Washington",
+      "age": 39,
+      "occupation": "Sales Manager",
+      "income_level": "middle",
+      "personality": {
+        "openness": 0.6, "skepticism": 0.5, "tech_savviness": 0.55,
+        "price_sensitivity": 0.5, "social_influence": 0.8, "conformity": 0.55, "novelty_seeking": 0.5
+      },
+      "interests": ["networking", "sports", "cars", "real estate"],
+      "values": ["relationships", "results", "loyalty"],
+      "pain_points": ["CRM complexity", "quota pressure", "work travel"],
+      "communication_style": "outgoing, relationship-driven, good at reading people",
+      "social_connections": ["npc_003", "npc_021", "npc_025"],
+      "trust_weights": {"npc_003": 0.6, "npc_021": 0.75, "npc_025": 0.8}
+    },
+    {
+      "id": "npc_019",
+      "name": "Nina Volkov",
+      "age": 28,
+      "occupation": "Growth Marketer",
+      "income_level": "middle",
+      "personality": {
+        "openness": 0.8, "skepticism": 0.4, "tech_savviness": 0.75,
+        "price_sensitivity": 0.5, "social_influence": 0.65, "conformity": 0.35, "novelty_seeking": 0.82
+      },
+      "interests": ["growth hacking", "analytics", "yoga", "podcasts"],
+      "values": ["experimentation", "data", "velocity"],
+      "pain_points": ["attribution tracking", "ad fatigue", "proving channel value"],
+      "communication_style": "experiment-minded, always testing hypotheses",
+      "social_connections": ["npc_008", "npc_012", "npc_025"],
+      "trust_weights": {"npc_008": 0.7, "npc_012": 0.75, "npc_025": 0.6}
+    },
+    {
+      "id": "npc_020",
+      "name": "George Mitchell",
+      "age": 58,
+      "occupation": "Accountant",
+      "income_level": "middle",
+      "personality": {
+        "openness": 0.3, "skepticism": 0.82, "tech_savviness": 0.35,
+        "price_sensitivity": 0.7, "social_influence": 0.4, "conformity": 0.75, "novelty_seeking": 0.15
+      },
+      "interests": ["fishing", "tax law", "classic cars", "local politics"],
+      "values": ["stability", "accuracy", "frugality"],
+      "pain_points": ["constant software updates", "subscription fatigue", "complexity"],
+      "communication_style": "conservative, risk-averse, needs strong justification for change",
+      "social_connections": ["npc_004", "npc_007", "npc_011", "npc_014"],
+      "trust_weights": {"npc_004": 0.85, "npc_007": 0.8, "npc_011": 0.7, "npc_014": 0.85}
+    },
+    {
+      "id": "npc_021",
+      "name": "Samantha Blake",
+      "age": 35,
+      "occupation": "HR Manager",
+      "income_level": "middle",
+      "personality": {
+        "openness": 0.65, "skepticism": 0.5, "tech_savviness": 0.55,
+        "price_sensitivity": 0.5, "social_influence": 0.65, "conformity": 0.6, "novelty_seeking": 0.45
+      },
+      "interests": ["people management", "wellness", "interior design", "book clubs"],
+      "values": ["people", "fairness", "work-life balance"],
+      "pain_points": ["employee retention", "tool fatigue", "compliance"],
+      "communication_style": "empathetic, consensus-builder, considers team impact first",
+      "social_connections": ["npc_017", "npc_018", "npc_024", "npc_025"],
+      "trust_weights": {"npc_017": 0.75, "npc_018": 0.7, "npc_024": 0.8, "npc_025": 0.65}
+    },
+    {
+      "id": "npc_022",
+      "name": "Kevin Tran",
+      "age": 23,
+      "occupation": "Junior Developer",
+      "income_level": "lower_middle",
+      "personality": {
+        "openness": 0.78, "skepticism": 0.35, "tech_savviness": 0.82,
+        "price_sensitivity": 0.75, "social_influence": 0.35, "conformity": 0.5, "novelty_seeking": 0.8
+      },
+      "interests": ["web dev", "crypto", "esports", "memes"],
+      "values": ["learning", "cool tech", "community"],
+      "pain_points": ["junior imposter syndrome", "tutorial hell", "low salary"],
+      "communication_style": "internet-native, meme-literate, enthusiastic about shiny tech",
+      "social_connections": ["npc_008", "npc_013", "npc_016", "npc_026"],
+      "trust_weights": {"npc_008": 0.7, "npc_013": 0.75, "npc_016": 0.8, "npc_026": 0.65}
+    },
+    {
+      "id": "npc_023",
+      "name": "Dorothy Evans",
+      "age": 67,
+      "occupation": "Retired Librarian",
+      "income_level": "lower_middle",
+      "personality": {
+        "openness": 0.5, "skepticism": 0.6, "tech_savviness": 0.25,
+        "price_sensitivity": 0.75, "social_influence": 0.5, "conformity": 0.65, "novelty_seeking": 0.2
+      },
+      "interests": ["reading", "grandchildren", "volunteering", "public radio"],
+      "values": ["knowledge", "community", "accessibility"],
+      "pain_points": ["confusing interfaces", "small text", "feeling left behind by tech"],
+      "communication_style": "thoughtful, values clarity, wary of things that seem too trendy",
+      "social_connections": ["npc_011", "npc_014", "npc_027"],
+      "trust_weights": {"npc_011": 0.85, "npc_014": 0.8, "npc_027": 0.7}
+    },
+    {
+      "id": "npc_024",
+      "name": "Rachel Andersen",
+      "age": 40,
+      "occupation": "Freelance Writer",
+      "income_level": "lower_middle",
+      "personality": {
+        "openness": 0.75, "skepticism": 0.6, "tech_savviness": 0.5,
+        "price_sensitivity": 0.7, "social_influence": 0.55, "conformity": 0.4, "novelty_seeking": 0.55
+      },
+      "interests": ["writing", "journalism", "coffee shops", "current events"],
+      "values": ["truth", "independence", "craft"],
+      "pain_points": ["AI replacing writers", "inconsistent income", "client management"],
+      "communication_style": "articulate, opinionated, asks probing questions",
+      "social_connections": ["npc_017", "npc_021", "npc_027"],
+      "trust_weights": {"npc_017": 0.7, "npc_021": 0.75, "npc_027": 0.8}
+    },
+    {
+      "id": "npc_025",
+      "name": "Omar Hassan",
+      "age": 32,
+      "occupation": "Physical Therapist",
+      "income_level": "middle",
+      "personality": {
+        "openness": 0.6, "skepticism": 0.55, "tech_savviness": 0.5,
+        "price_sensitivity": 0.55, "social_influence": 0.5, "conformity": 0.5, "novelty_seeking": 0.45
+      },
+      "interests": ["health", "fitness", "soccer", "family"],
+      "values": ["health", "patience", "evidence-based care"],
+      "pain_points": ["insurance paperwork", "patient no-shows", "documentation burden"],
+      "communication_style": "patient, practical, focused on real-world benefit",
+      "social_connections": ["npc_018", "npc_019", "npc_021", "npc_028"],
+      "trust_weights": {"npc_018": 0.7, "npc_019": 0.55, "npc_021": 0.65, "npc_028": 0.8}
+    },
+    {
+      "id": "npc_026",
+      "name": "Emily Zhang",
+      "age": 27,
+      "occupation": "Graphic Designer",
+      "income_level": "lower_middle",
+      "personality": {
+        "openness": 0.82, "skepticism": 0.35, "tech_savviness": 0.72,
+        "price_sensitivity": 0.65, "social_influence": 0.5, "conformity": 0.4, "novelty_seeking": 0.78
+      },
+      "interests": ["illustration", "typography", "indie games", "photography"],
+      "values": ["visual beauty", "originality", "craft"],
+      "pain_points": ["AI art controversy", "undervalued creative work", "client revisions"],
+      "communication_style": "visual-first, appreciates good design, wary of AI replacing creatives",
+      "social_connections": ["npc_022", "npc_029", "npc_030"],
+      "trust_weights": {"npc_022": 0.7, "npc_029": 0.8, "npc_030": 0.65}
+    },
+    {
+      "id": "npc_027",
+      "name": "Frank Russo",
+      "age": 48,
+      "occupation": "Construction Foreman",
+      "income_level": "middle",
+      "personality": {
+        "openness": 0.3, "skepticism": 0.75, "tech_savviness": 0.25,
+        "price_sensitivity": 0.7, "social_influence": 0.55, "conformity": 0.65, "novelty_seeking": 0.15
+      },
+      "interests": ["sports", "home improvement", "BBQ", "trucks"],
+      "values": ["hard work", "common sense", "family"],
+      "pain_points": ["unnecessary technology", "things that don't work offline", "subscription everything"],
+      "communication_style": "blunt, practical, dismisses things that seem impractical",
+      "social_connections": ["npc_023", "npc_024", "npc_028"],
+      "trust_weights": {"npc_023": 0.7, "npc_024": 0.6, "npc_028": 0.85}
+    },
+    {
+      "id": "npc_028",
+      "name": "Maria Gonzalez",
+      "age": 37,
+      "occupation": "Social Worker",
+      "income_level": "lower_middle",
+      "personality": {
+        "openness": 0.65, "skepticism": 0.5, "tech_savviness": 0.45,
+        "price_sensitivity": 0.75, "social_influence": 0.6, "conformity": 0.5, "novelty_seeking": 0.4
+      },
+      "interests": ["community organizing", "mental health", "yoga", "documentaries"],
+      "values": ["equity", "compassion", "accessibility"],
+      "pain_points": ["systemic barriers", "burnout", "limited resources"],
+      "communication_style": "empathetic, equity-focused, asks 'who does this help and who does it leave out?'",
+      "social_connections": ["npc_025", "npc_027", "npc_030"],
+      "trust_weights": {"npc_025": 0.8, "npc_027": 0.7, "npc_030": 0.75}
+    },
+    {
+      "id": "npc_029",
+      "name": "Chris Lawson",
+      "age": 45,
+      "occupation": "IT Director",
+      "income_level": "upper_middle",
+      "personality": {
+        "openness": 0.55, "skepticism": 0.7, "tech_savviness": 0.8,
+        "price_sensitivity": 0.4, "social_influence": 0.65, "conformity": 0.5, "novelty_seeking": 0.4
+      },
+      "interests": ["enterprise tech", "cybersecurity", "sailing", "whiskey"],
+      "values": ["security", "scalability", "proven solutions"],
+      "pain_points": ["shadow IT", "vendor promises vs reality", "budget justification"],
+      "communication_style": "cautious, evaluates enterprise readiness, asks about security first",
+      "social_connections": ["npc_026", "npc_030"],
+      "trust_weights": {"npc_026": 0.6, "npc_030": 0.75}
+    },
+    {
+      "id": "npc_030",
+      "name": "Lisa Brennan",
+      "age": 33,
+      "occupation": "E-commerce Entrepreneur",
+      "income_level": "middle",
+      "personality": {
+        "openness": 0.78, "skepticism": 0.45, "tech_savviness": 0.68,
+        "price_sensitivity": 0.6, "social_influence": 0.6, "conformity": 0.3, "novelty_seeking": 0.72
+      },
+      "interests": ["D2C brands", "supply chain", "Instagram marketing", "yoga"],
+      "values": ["independence", "brand building", "customer experience"],
+      "pain_points": ["CAC rising", "supply chain disruptions", "platform dependency"],
+      "communication_style": "entrepreneurial, opportunity-focused, evaluates for business potential",
+      "social_connections": ["npc_026", "npc_028", "npc_029"],
+      "trust_weights": {"npc_026": 0.7, "npc_028": 0.65, "npc_029": 0.75}
+    }
+  ]
+}

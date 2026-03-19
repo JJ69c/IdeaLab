@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Environment & secrets
+.env
+
+# Database
+*.db
+*.db.*
+*.sqlite
+*.sqlite3
+
+# Uploads (user-generated content)
+uploads/
+
+# Frontend build
+node_modules/
+dist/
+.vite/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/

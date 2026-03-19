@@ -1,0 +1,14 @@
+{
+  "idea": {
+    "title": "FocusFlow",
+    "description": "An AI-powered focus timer app that automatically detects when you're distracted (switching tabs, opening social media) and gently nudges you back. It learns your optimal focus patterns over time, suggests when to take breaks, and provides weekly productivity insights. Includes a social accountability feature where you can share focus streaks with friends.",
+    "category": "productivity_app",
+    "target_audience": "remote workers and students",
+    "price_point": "$4.99/month or $39.99/year"
+  },
+  "config": {
+    "num_ticks": 8,
+    "population_size": 30,
+    "seed_count": 5
+  }
+}

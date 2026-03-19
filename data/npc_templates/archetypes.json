@@ -1,0 +1,220 @@
+{
+  "archetypes": [
+    {
+      "id": "enthusiast",
+      "label": "Enthusiast",
+      "decision_style": "Emotion-first, explores before evaluating. Gets excited by vision and novelty. Decides fast.",
+      "adoption_path": "awareness → immediate interest → tries it → tells everyone → may cool off",
+      "typical_objections": [
+        "What happens after the hype?",
+        "Is this actually different from what already exists?",
+        "Will this still be around in a year?"
+      ],
+      "influence_susceptibility": "high_novelty, moderate_social, low_price",
+      "spread_likelihood": "high",
+      "traits": {
+        "openness":          {"min": 0.75, "max": 0.95},
+        "skepticism":        {"min": 0.10, "max": 0.30},
+        "tech_savviness":    {"min": 0.60, "max": 0.90},
+        "price_sensitivity": {"min": 0.15, "max": 0.35},
+        "social_influence":  {"min": 0.65, "max": 0.90},
+        "conformity":        {"min": 0.20, "max": 0.40},
+        "novelty_seeking":   {"min": 0.80, "max": 0.95}
+      },
+      "count_range": [4, 5],
+      "preferred_connections": ["enthusiast", "gatekeeper", "pragmatist"]
+    },
+    {
+      "id": "pragmatist",
+      "label": "Pragmatist",
+      "decision_style": "Utility-first. Evaluates cost/benefit. Needs clear problem-to-solution mapping.",
+      "adoption_path": "awareness → what problem does this solve? → evaluates alternatives → cautious trial → adopts if measurable benefit",
+      "typical_objections": [
+        "How is this better than what I use now?",
+        "What's the switching cost?",
+        "Show me the numbers",
+        "Does this integrate with my current workflow?"
+      ],
+      "influence_susceptibility": "high_utility, moderate_peer, low_novelty",
+      "spread_likelihood": "moderate",
+      "traits": {
+        "openness":          {"min": 0.40, "max": 0.60},
+        "skepticism":        {"min": 0.50, "max": 0.70},
+        "tech_savviness":    {"min": 0.50, "max": 0.80},
+        "price_sensitivity": {"min": 0.50, "max": 0.70},
+        "social_influence":  {"min": 0.30, "max": 0.60},
+        "conformity":        {"min": 0.40, "max": 0.60},
+        "novelty_seeking":   {"min": 0.20, "max": 0.45}
+      },
+      "count_range": [8, 10],
+      "preferred_connections": ["pragmatist", "follower", "gatekeeper", "budget_conscious"]
+    },
+    {
+      "id": "skeptic",
+      "label": "Skeptic",
+      "decision_style": "Risk-first. Assumes new things are worse until proven otherwise. Looks for flaws.",
+      "adoption_path": "awareness → what could go wrong? → resists → needs trusted peer endorsement → slow adoption → strong retention",
+      "typical_objections": [
+        "This sounds too good to be true",
+        "What happens to my data?",
+        "Who is behind this?",
+        "I've seen this kind of thing fail before"
+      ],
+      "influence_susceptibility": "low_marketing, high_trusted_peer, moderate_evidence",
+      "spread_likelihood": "low_but_credible",
+      "traits": {
+        "openness":          {"min": 0.15, "max": 0.40},
+        "skepticism":        {"min": 0.70, "max": 0.90},
+        "tech_savviness":    {"min": 0.20, "max": 0.60},
+        "price_sensitivity": {"min": 0.40, "max": 0.70},
+        "social_influence":  {"min": 0.20, "max": 0.50},
+        "conformity":        {"min": 0.15, "max": 0.40},
+        "novelty_seeking":   {"min": 0.05, "max": 0.25}
+      },
+      "count_range": [5, 6],
+      "preferred_connections": ["gatekeeper", "pragmatist", "skeptic"]
+    },
+    {
+      "id": "follower",
+      "label": "Follower",
+      "decision_style": "Social-proof-first. Watches what others do before committing. Comfortable adopting mainstream.",
+      "adoption_path": "awareness → watches peers → if everyone else is using it → adopts after critical mass → recommends because everyone uses it",
+      "typical_objections": [
+        "I'll wait and see",
+        "Has anyone I know tried this?",
+        "Is this actually catching on?",
+        "I don't want to be the first one"
+      ],
+      "influence_susceptibility": "very_high_peer, low_novelty, moderate_price",
+      "spread_likelihood": "high_after_critical_mass",
+      "traits": {
+        "openness":          {"min": 0.35, "max": 0.55},
+        "skepticism":        {"min": 0.30, "max": 0.50},
+        "tech_savviness":    {"min": 0.30, "max": 0.60},
+        "price_sensitivity": {"min": 0.40, "max": 0.65},
+        "social_influence":  {"min": 0.15, "max": 0.35},
+        "conformity":        {"min": 0.70, "max": 0.90},
+        "novelty_seeking":   {"min": 0.15, "max": 0.40}
+      },
+      "count_range": [6, 8],
+      "preferred_connections": ["pragmatist", "follower", "budget_conscious"]
+    },
+    {
+      "id": "gatekeeper",
+      "label": "Gatekeeper",
+      "decision_style": "Authority/expertise-first. Evaluates from domain knowledge. Their opinion carries weight.",
+      "adoption_path": "awareness → deep evaluation → does this meet professional standards? → conditional endorsement → becomes reference",
+      "typical_objections": [
+        "The implementation details worry me",
+        "This doesn't scale",
+        "The security model is unclear",
+        "I've built something similar and it failed because..."
+      ],
+      "influence_susceptibility": "low_hype, high_technical_merit, low_social_pressure",
+      "spread_likelihood": "low_volume_high_impact",
+      "traits": {
+        "openness":          {"min": 0.40, "max": 0.65},
+        "skepticism":        {"min": 0.55, "max": 0.75},
+        "tech_savviness":    {"min": 0.70, "max": 0.95},
+        "price_sensitivity": {"min": 0.25, "max": 0.50},
+        "social_influence":  {"min": 0.60, "max": 0.85},
+        "conformity":        {"min": 0.10, "max": 0.30},
+        "novelty_seeking":   {"min": 0.30, "max": 0.55}
+      },
+      "count_range": [3, 4],
+      "preferred_connections": ["enthusiast", "skeptic", "pragmatist"]
+    },
+    {
+      "id": "budget_conscious",
+      "label": "Budget-Conscious",
+      "decision_style": "Price-first. Will use anything free, resists anything paid. Evaluates value-per-dollar obsessively.",
+      "adoption_path": "awareness → how much? → rejects if expensive → tries if free/cheap → may upgrade if deeply integrated",
+      "typical_objections": [
+        "Too expensive",
+        "Why would I pay when alternatives are free?",
+        "What do I actually get for that price?",
+        "Are there hidden costs?"
+      ],
+      "influence_susceptibility": "very_high_price, moderate_utility, low_novelty",
+      "spread_likelihood": "moderate_if_free",
+      "traits": {
+        "openness":          {"min": 0.30, "max": 0.60},
+        "skepticism":        {"min": 0.40, "max": 0.65},
+        "tech_savviness":    {"min": 0.30, "max": 0.70},
+        "price_sensitivity": {"min": 0.80, "max": 0.95},
+        "social_influence":  {"min": 0.20, "max": 0.45},
+        "conformity":        {"min": 0.40, "max": 0.65},
+        "novelty_seeking":   {"min": 0.20, "max": 0.50}
+      },
+      "count_range": [4, 5],
+      "preferred_connections": ["follower", "pragmatist", "budget_conscious"]
+    }
+  ],
+
+  "presets": {
+    "balanced": {
+      "label": "Balanced General Market",
+      "composition": {
+        "enthusiast": 4, "pragmatist": 9, "skeptic": 5,
+        "follower": 7, "gatekeeper": 3, "budget_conscious": 2
+      }
+    },
+    "young_consumer": {
+      "label": "Young Consumer Market",
+      "composition": {
+        "enthusiast": 7, "pragmatist": 5, "skeptic": 2,
+        "follower": 9, "gatekeeper": 2, "budget_conscious": 5
+      }
+    },
+    "skeptical": {
+      "label": "Saturated Skeptical Market",
+      "composition": {
+        "enthusiast": 2, "pragmatist": 8, "skeptic": 9,
+        "follower": 4, "gatekeeper": 4, "budget_conscious": 3
+      }
+    },
+    "premium": {
+      "label": "Premium-Friendly Market",
+      "composition": {
+        "enthusiast": 6, "pragmatist": 8, "skeptic": 3,
+        "follower": 5, "gatekeeper": 5, "budget_conscious": 3
+      }
+    },
+    "price_sensitive": {
+      "label": "Price-Sensitive Market",
+      "composition": {
+        "enthusiast": 2, "pragmatist": 7, "skeptic": 4,
+        "follower": 6, "gatekeeper": 2, "budget_conscious": 9
+      }
+    }
+  },
+
+  "name_pool": [
+    "Maya Chen", "David Park", "Sarah Johnson", "James Wright", "Aisha Patel",
+    "Robert Kim", "Linda Torres", "Alex Rivera", "Catherine Zhao", "Marcus Thompson",
+    "Patricia Okonkwo", "Jason Lee", "Zoe Martinez", "William Foster", "Priya Sharma",
+    "Tyler Brooks", "Helen Nakamura", "Derek Washington", "Nina Volkov", "George Mitchell",
+    "Samantha Blake", "Kevin Tran", "Dorothy Evans", "Rachel Andersen", "Omar Hassan",
+    "Emily Zhang", "Frank Russo", "Maria Gonzalez", "Chris Lawson", "Lisa Brennan",
+    "Andre Williams", "Sofia Reyes", "Victor Johansson", "Mei Lin Wu", "Carlos Ortega",
+    "Hannah Park", "Daniel Okafor", "Yuki Tanaka", "Benjamin Cole", "Fatima Al-Rashid"
+  ],
+
+  "occupation_pool": {
+    "enthusiast":       ["Content Creator", "UX Designer", "Product Manager", "Startup Founder", "Marketing Specialist", "Innovation Consultant"],
+    "pragmatist":       ["Operations Manager", "Financial Analyst", "Project Manager", "Business Analyst", "Account Manager", "Supply Chain Coordinator"],
+    "skeptic":          ["Risk Analyst", "Quality Assurance Lead", "Compliance Officer", "Security Consultant", "Auditor", "Regulatory Specialist"],
+    "follower":         ["Administrative Assistant", "HR Coordinator", "Customer Support Rep", "Sales Associate", "Office Manager", "Retail Manager"],
+    "gatekeeper":       ["Software Architect", "CTO", "Engineering Lead", "Data Scientist", "Research Director", "Technical Advisor"],
+    "budget_conscious": ["Freelance Writer", "Graduate Student", "Teacher", "Small Business Owner", "Nonprofit Coordinator", "Part-Time Consultant"]
+  },
+
+  "income_pool": {
+    "enthusiast":       ["middle", "upper_middle"],
+    "pragmatist":       ["middle", "upper_middle"],
+    "skeptic":          ["middle", "upper_middle", "low"],
+    "follower":         ["low", "middle"],
+    "gatekeeper":       ["upper_middle", "high"],
+    "budget_conscious": ["low", "middle"]
+  }
+}
