@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -235,8 +235,16 @@ const selectClass = inputClass
 
 export default function Inject() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const variantOf = searchParams.get('variant_of')
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [variantParent, setVariantParent] = useState<{
+    id: string; idea_title: string
+  } | null>(null)
+  const [variantName, setVariantName] = useState('')
+  const [prefilling, setPrefilling] = useState(!!variantOf)
 
   // --- Form state ---
   const [form, setForm] = useState({
@@ -267,6 +275,46 @@ export default function Inject() {
 
   const update = (field: string, value: string | number) =>
     setForm(f => ({ ...f, [field]: value }))
+
+  // --- Variant pre-fill ---
+  useEffect(() => {
+    if (!variantOf) return
+    fetch(`/api/simulations/${variantOf}`)
+      .then(r => r.json())
+      .then(data => {
+        setVariantParent({ id: data.id, idea_title: data.idea_title })
+        const meta = data.idea_metadata || {}
+        const config = data.config || {}
+
+        // Determine if category is a known value or custom
+        const allKnownCategories = CATEGORY_GROUPS.flatMap(g => g.options.map(o => o.value))
+        const isKnownCategory = allKnownCategories.includes(data.idea_category)
+
+        // Determine if price is a known preset or custom
+        const isKnownPrice = PRICE_PRESETS.includes(meta.price_point || '')
+
+        setForm({
+          title: data.idea_title || '',
+          description: data.idea_description || '',
+          category: isKnownCategory ? data.idea_category : (data.idea_category ? '_custom' : ''),
+          customCategory: isKnownCategory ? '' : (data.idea_category || ''),
+          stage: meta.stage || 'concept',
+          target_audience: meta.target_audience || '',
+          problem_statement: meta.problem_statement || '',
+          price_point: isKnownPrice ? (meta.price_point || '') : (meta.price_point ? '_custom' : ''),
+          customPrice: isKnownPrice ? '' : (meta.price_point || ''),
+          existing_alternatives: meta.existing_alternatives || '',
+          differentiator: meta.differentiator || '',
+          known_strengths: meta.known_strengths || '',
+          known_risks: meta.known_risks || '',
+          num_ticks: config.num_ticks ?? 8,
+          population_size: config.population_size ?? 30,
+          seed_count: config.seed_count ?? 5,
+        })
+        setPrefilling(false)
+      })
+      .catch(() => setPrefilling(false))
+  }, [variantOf])
 
   // --- Asset state ---
   const [assets, setAssets] = useState<AssetEntry[]>([])
@@ -332,30 +380,36 @@ export default function Inject() {
           note: a.note,
         }))
 
+      const body: Record<string, unknown> = {
+        idea: {
+          title: form.title,
+          description: form.description,
+          category: resolvedCategory || 'general',
+          stage: form.stage,
+          target_audience: form.target_audience || 'general public',
+          problem_statement: form.problem_statement,
+          price_point: resolvedPrice || 'not specified',
+          existing_alternatives: form.existing_alternatives,
+          differentiator: form.differentiator,
+          known_strengths: form.known_strengths,
+          known_risks: form.known_risks,
+        },
+        config: {
+          num_ticks: form.num_ticks,
+          population_size: form.population_size,
+          seed_count: form.seed_count,
+        },
+        asset_refs: assetRefs,
+      }
+      if (variantOf) {
+        body.parent_simulation_id = variantOf
+        if (variantName.trim()) body.variant_name = variantName.trim()
+      }
+
       const res = await fetch('/api/simulations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          idea: {
-            title: form.title,
-            description: form.description,
-            category: resolvedCategory || 'general',
-            stage: form.stage,
-            target_audience: form.target_audience || 'general public',
-            problem_statement: form.problem_statement,
-            price_point: resolvedPrice || 'not specified',
-            existing_alternatives: form.existing_alternatives,
-            differentiator: form.differentiator,
-            known_strengths: form.known_strengths,
-            known_risks: form.known_risks,
-          },
-          config: {
-            num_ticks: form.num_ticks,
-            population_size: form.population_size,
-            seed_count: form.seed_count,
-          },
-          asset_refs: assetRefs,
-        }),
+        body: JSON.stringify(body),
       })
 
       if (!res.ok) throw new Error(`Server error: ${res.status}`)
@@ -368,12 +422,37 @@ export default function Inject() {
     }
   }
 
+  if (prefilling) {
+    return <p className="text-gray-500">Loading parent simulation data...</p>
+  }
+
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold mb-1">Set Up Simulation</h1>
-      <p className="text-sm text-gray-500 mb-8">
-        Define your idea and configure how the simulated population will evaluate it.
+      <h1 className="text-2xl font-bold mb-1">
+        {variantParent ? 'Create Variant' : 'Set Up Simulation'}
+      </h1>
+      <p className="text-sm text-gray-500 mb-4">
+        {variantParent
+          ? 'Adjust parameters and re-run to compare results.'
+          : 'Define your idea and configure how the simulated population will evaluate it.'}
       </p>
+
+      {variantParent && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 mb-6 flex items-center justify-between">
+          <div className="text-sm">
+            <span className="text-indigo-600 font-medium">Variant of:</span>{' '}
+            <Link
+              to={`/report/${variantParent.id}`}
+              className="text-indigo-700 underline hover:text-indigo-900"
+            >
+              {variantParent.idea_title}
+            </Link>
+          </div>
+          <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
+            What-If
+          </span>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-8">
 
@@ -734,6 +813,21 @@ export default function Inject() {
           </div>
         </CollapsibleSection>
 
+        {/* ---- Variant Name (only for variants) ---- */}
+        {variantOf && (
+          <div>
+            <FieldLabel label="What are you testing?" hint="optional label for this variant" />
+            <input
+              type="text"
+              className={inputClass}
+              placeholder="e.g. Lower price, Different audience, Simpler description"
+              maxLength={200}
+              value={variantName}
+              onChange={e => setVariantName(e.target.value)}
+            />
+          </div>
+        )}
+
         {/* ---- Errors ---- */}
         {error && (
           <div className="bg-red-50 text-red-700 text-sm rounded-lg p-3">{error}</div>
@@ -745,7 +839,9 @@ export default function Inject() {
           disabled={loading}
           className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {loading ? 'Launching Simulation...' : 'Launch Simulation'}
+          {loading
+            ? 'Launching Simulation...'
+            : variantOf ? 'Launch Variant Simulation' : 'Launch Simulation'}
         </button>
 
         {loading && (

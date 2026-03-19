@@ -6,34 +6,76 @@ modulate the base formulas:
 - novelty boosts word-of-mouth spread
 - price_friction reduces casual recommendations
 - trust_barrier increases the threshold for positive spread
+
+Stage 3 additions:
+- Archetype-aware susceptibility via susceptibility_multiplier
+- Exposure decay: diminishing returns over time (except Followers)
+- Resistance floor: archetypes below their floor are nearly immune to peer influence
+- Source credibility: archetype-specific discussion weight multipliers
 """
 
 from __future__ import annotations
 
 import random
 
+from backend.simulation.evaluation import get_archetype_evaluation
 from backend.simulation.npc import Npc
 from backend.simulation.world import SpreadEvent, WorldState
 
 
-def compute_peer_susceptibility(conformity: float, skepticism: float) -> float:
-    """How susceptible an NPC is to peer influence.
+# ---------------------------------------------------------------------------
+# Archetype source credibility multipliers for discussions
+# ---------------------------------------------------------------------------
 
-    Conformity is the primary driver, but skepticism acts as a damper.
-    A high-conformity skeptic (conformity=0.8, skepticism=0.8) resists more
-    than a high-conformity trusting NPC (conformity=0.8, skepticism=0.2).
+# How credible each archetype is as a discussion SOURCE.
+# Gatekeepers/Skeptics carry weight when they endorse.
+# Followers amplify but don't originate conviction.
+_SOURCE_CREDIBILITY: dict[str, float] = {
+    "gatekeeper": 1.3,
+    "skeptic": 1.2,
+    "health_evaluator": 1.1,
+    "values_buyer": 1.0,
+    "pragmatist": 1.0,
+    "enthusiast": 0.9,
+    "brand_buyer": 0.9,
+    "budget_conscious": 0.8,
+    "loyal_incumbent": 0.7,
+    "follower": 0.6,
+}
 
-    Returns a multiplier in roughly [0.0, 0.3].
+
+def compute_peer_susceptibility(npc: Npc, world: WorldState) -> float:
+    """Archetype-aware susceptibility to peer influence.
+
+    Base formula: conformity * (1 - skepticism * 0.3) * 0.3
+    Then multiplied by:
+    - archetype susceptibility_multiplier
+    - exposure decay (diminishing returns over ticks for most archetypes)
     """
-    return conformity * (1.0 - skepticism * 0.3) * 0.3
+    base = npc.personality.conformity * (1.0 - npc.personality.skepticism * 0.3) * 0.3
+
+    # Archetype multiplier
+    archetype_id = getattr(npc, "archetype", None)
+    eval_def = get_archetype_evaluation(archetype_id)
+    base *= eval_def.susceptibility_multiplier
+
+    # Exposure decay: diminishing returns over time
+    exposure = npc.state.exposure_count
+    if archetype_id == "follower":
+        # Followers get INCREASING returns (social proof accumulates)
+        decay = min(1.5, 1.0 + 0.08 * exposure)
+    else:
+        # Everyone else: diminishing returns
+        decay = 1.0 / (1.0 + 0.25 * exposure)
+
+    return base * decay
 
 
 def calculate_peer_influence(npc: Npc, world: WorldState) -> float:
     """Calculate how much an NPC's opinion shifts based on their social connections.
 
     Uses a weighted average of connected NPCs' interest scores, modulated by
-    the NPC's peer susceptibility (conformity + skepticism), trust weights,
-    and product-level market saturation.
+    susceptibility, trust weights, and archetype resistance floor.
     """
     if not npc.social_connections:
         return 0.0
@@ -61,17 +103,25 @@ def calculate_peer_influence(npc: Npc, world: WorldState) -> float:
     current = npc.state.interest_score
 
     # Delta is pulled toward peer average, modulated by susceptibility
-    susceptibility = compute_peer_susceptibility(
-        npc.personality.conformity, npc.personality.skepticism,
-    )
+    susceptibility = compute_peer_susceptibility(npc, world)
     raw_delta = (peer_avg - current) * susceptibility
 
-    # Product profile modulation: saturated markets → people resist peer pressure
-    # more because they already have strong opinions about existing solutions
+    # Product profile modulation: saturated markets → stronger priors
     profile = getattr(world, "product_profile", None)
     if profile is not None:
         saturation_damper = 1.0 - profile.market_saturation * 0.30
         raw_delta *= saturation_damper
+
+    # Resistance floor: if the NPC's baseline is below their archetype's
+    # resistance_floor, peer influence is heavily dampened. The product is
+    # fundamentally wrong for them — no amount of enthusiasm changes that.
+    archetype_id = getattr(npc, "archetype", None)
+    eval_def = get_archetype_evaluation(archetype_id)
+    if eval_def.resistance_floor > 0 and profile is not None:
+        from backend.simulation.evaluation import compute_archetype_baseline
+        baseline = compute_archetype_baseline(profile, eval_def)
+        if baseline < eval_def.resistance_floor:
+            raw_delta *= 0.15  # nearly immune
 
     return round(raw_delta, 4)
 
@@ -126,6 +176,7 @@ def compute_discussion_weight(
     source_social_influence: float,
     trust: float,
     target_skepticism: float,
+    source_archetype: str | None = None,
 ) -> float:
     """How much a discussion partner's argument actually moves the target.
 
@@ -134,14 +185,15 @@ def compute_discussion_weight(
     - trust: arguments from trusted connections carry more weight
     - target_skepticism: skeptics discount what they hear
 
-    Formula: (source_influence * trust) / max(target_skepticism, 0.2)
-    The floor on skepticism (0.2) prevents division-by-near-zero for
-    very trusting NPCs. Clamped to [0.3, 1.5] so even the worst pairing
-    still allows some effect, and the best can amplify but not double.
+    Stage 3 addition: source archetype credibility multiplier.
+    Gatekeepers and Skeptics carry high credibility when endorsing.
+    Followers have low source weight — they amplify but don't originate conviction.
 
-    Applied as a multiplier on the raw LLM discussion delta in engine.py.
+    Formula: (source_influence * trust * credibility) / max(target_skepticism, 0.2)
+    Clamped to [0.3, 1.5].
     """
-    raw = source_social_influence * trust / max(target_skepticism, 0.2)
+    credibility = _SOURCE_CREDIBILITY.get(source_archetype or "", 1.0)
+    raw = source_social_influence * trust * credibility / max(target_skepticism, 0.2)
     return max(0.3, min(1.5, raw))
 
 
@@ -162,7 +214,7 @@ def compute_spread_receptiveness(novelty_seeking: float, openness: float) -> flo
 def compute_spreads(world: WorldState) -> list[SpreadEvent]:
     """Determine which interested NPCs spread awareness to unaware connections.
 
-    Base probability: interest × social_influence × trust × target_receptiveness × 0.5
+    Base probability: interest * social_influence * trust * target_receptiveness * 0.5
 
     Product profile modulation:
     - Novel ideas spread faster (people talk about things they haven't seen before)

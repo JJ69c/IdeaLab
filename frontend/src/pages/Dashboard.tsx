@@ -11,6 +11,8 @@ interface SimSummary {
     interest_rate?: number
     adoption_likelihood?: number
   } | null
+  parent_simulation_id: string | null
+  variant_name: string | null
 }
 
 export default function Dashboard() {
@@ -53,7 +55,14 @@ export default function Dashboard() {
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="font-semibold">{sim.idea_title}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold">{sim.idea_title}</h3>
+                    {sim.parent_simulation_id && (
+                      <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium">
+                        {sim.variant_name || 'variant'}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500 mt-1">
                     {new Date(sim.created_at).toLocaleDateString()} &middot;{' '}
                     <span className={

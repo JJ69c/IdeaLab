@@ -69,6 +69,15 @@ class NpcState:
     history: list[dict] = field(default_factory=list)  # [{tick, stance, interest}]
     influence_sources: list[str] = field(default_factory=list)
 
+    # Stage 3: Exposure tracking for archetype-aware influence
+    exposure_count: int = 0  # ticks since becoming aware (incremented each tick)
+    discussion_partners: set = field(default_factory=set)  # NPC IDs discussed with
+
+    def increment_exposure(self):
+        """Increment exposure counter for aware NPCs. Called once per tick."""
+        if self.aware:
+            self.exposure_count += 1
+
     def become_aware(self, tick: int, source: str):
         self.aware = True
         self.awareness_tick = tick
@@ -107,6 +116,7 @@ class NpcState:
 
         if partner_id not in self.influence_sources:
             self.influence_sources.append(partner_id)
+        self.discussion_partners.add(partner_id)
 
         self.events.append(
             {"tick": tick, "type": "discussed", "with": partner_id,
@@ -158,6 +168,7 @@ class NpcState:
             "emotional_reaction": self.emotional_reaction,
             "history": self.history,
             "influence_sources": self.influence_sources,
+            "exposure_count": self.exposure_count,
         }
 
 
@@ -180,6 +191,7 @@ class Npc:
 
     # Archetype tag (set by population generator, None for legacy JSON NPCs)
     archetype: str | None = None
+    decision_style: str = ""
 
     # Runtime state (reset per simulation)
     state: NpcState = field(default_factory=NpcState)
@@ -222,6 +234,7 @@ class Npc:
             "pain_points": self.pain_points,
             "communication_style": self.communication_style,
             "archetype": self.archetype,
+            "decision_style": self.decision_style,
         }
 
     def to_init_dict(self) -> dict:

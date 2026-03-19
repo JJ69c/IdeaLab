@@ -10,6 +10,8 @@ class SimulationSummary(BaseModel):
     created_at: datetime
     completed_at: datetime | None = None
     metrics: dict | None = None
+    parent_simulation_id: str | None = None
+    variant_name: str | None = None
 
 
 class SimulationDetail(BaseModel):
@@ -17,6 +19,7 @@ class SimulationDetail(BaseModel):
     idea_title: str
     idea_description: str
     idea_category: str
+    idea_metadata: dict | None = None
     config: dict
     status: str
     created_at: datetime
@@ -24,6 +27,9 @@ class SimulationDetail(BaseModel):
     report: dict | None = None
     summary: str | None = None
     metrics: dict | None = None
+    parent_simulation_id: str | None = None
+    variant_name: str | None = None
+    changed_fields: list[str] | None = None
 
 
 class NpcSummary(BaseModel):

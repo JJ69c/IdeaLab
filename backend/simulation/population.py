@@ -43,6 +43,11 @@ class ArchetypeDef:
     typical_objections: list[str]
     traits: dict[str, tuple[float, float]]  # trait_name → (min, max)
     preferred_connections: list[str]
+    # Evaluation fields (used by evaluation.py, parsed here for convenience)
+    evaluation_weights: dict[str, float] | None = None
+    adoption_threshold: float = 0.65
+    resistance_floor: float = 0.0
+    susceptibility_multiplier: float = 1.0
 
 
 def load_archetypes(path: Path | None = None) -> dict:
@@ -67,6 +72,10 @@ def parse_archetype_defs(raw: dict) -> dict[str, ArchetypeDef]:
             typical_objections=a["typical_objections"],
             traits=traits,
             preferred_connections=a["preferred_connections"],
+            evaluation_weights=a.get("evaluation_weights"),
+            adoption_threshold=a.get("adoption_threshold", 0.65),
+            resistance_floor=a.get("resistance_floor", 0.0),
+            susceptibility_multiplier=a.get("susceptibility_multiplier", 1.0),
         )
     return defs
 
@@ -107,6 +116,10 @@ def generate_npc(
         "follower": ["agreeable", "consensus-seeking", "observational"],
         "gatekeeper": ["authoritative", "technical", "evaluative"],
         "budget_conscious": ["cost-aware", "value-focused", "practical"],
+        "health_evaluator": ["evidence-seeking", "health-conscious", "cautiously analytical"],
+        "brand_buyer": ["trend-aware", "aesthetics-driven", "brand-conscious"],
+        "values_buyer": ["mission-oriented", "ethics-focused", "principled"],
+        "loyal_incumbent": ["change-resistant", "reliability-focused", "habit-driven"],
     }
     style = rng.choice(styles.get(archetype.id, ["neutral"]))
 
@@ -124,6 +137,7 @@ def generate_npc(
         social_connections=[],  # filled by build_social_graph
         trust_weights={},       # filled by build_social_graph
         archetype=archetype.id,
+        decision_style=archetype.decision_style,
     )
 
 

@@ -39,16 +39,45 @@ async def create_simulation(
     Returns immediately with status='running'. Use the SSE stream endpoint
     to watch events live, or poll GET /{id} until status='completed'.
     """
+    # Variant lineage: validate parent and compute changed fields
+    changed_fields = None
+    if request.parent_simulation_id:
+        parent_result = await db.execute(
+            select(SimulationRecord).where(
+                SimulationRecord.id == request.parent_simulation_id
+            )
+        )
+        parent = parent_result.scalar_one_or_none()
+        if not parent:
+            raise HTTPException(status_code=404, detail="Parent simulation not found")
+        if parent.status != "completed":
+            raise HTTPException(
+                status_code=400,
+                detail="Can only create variants from completed simulations",
+            )
+        changed_fields = _compute_changed_fields(request, parent)
+
+    idea_metadata = {
+        "stage": request.idea.stage,
+        "target_audience": request.idea.target_audience,
+        "problem_statement": request.idea.problem_statement,
+        "price_point": request.idea.price_point,
+        "existing_alternatives": request.idea.existing_alternatives,
+        "differentiator": request.idea.differentiator,
+        "known_strengths": request.idea.known_strengths,
+        "known_risks": request.idea.known_risks,
+    }
+
     record = SimulationRecord(
         idea_title=request.idea.title,
         idea_description=request.idea.description,
         idea_category=request.idea.category,
-        idea_metadata={
-            "target_audience": request.idea.target_audience,
-            "price_point": request.idea.price_point,
-        },
+        idea_metadata=idea_metadata,
         config=request.config.model_dump(),
         status="running",
+        parent_simulation_id=request.parent_simulation_id,
+        variant_name=request.variant_name,
+        changed_fields=changed_fields,
     )
     db.add(record)
     await db.commit()
@@ -108,10 +137,54 @@ async def create_simulation(
         idea_title=record.idea_title,
         idea_description=record.idea_description,
         idea_category=record.idea_category,
+        idea_metadata=record.idea_metadata,
         config=record.config,
         status="running",
         created_at=record.created_at,
+        parent_simulation_id=record.parent_simulation_id,
+        variant_name=record.variant_name,
+        changed_fields=record.changed_fields,
     )
+
+
+def _compute_changed_fields(
+    request: CreateSimulationRequest, parent: SimulationRecord
+) -> list[str]:
+    """Compare request fields against parent's stored data to find what changed."""
+    changed: list[str] = []
+    parent_meta = parent.idea_metadata or {}
+    parent_config = parent.config or {}
+
+    # Compare top-level idea fields
+    field_map = {
+        "title": ("idea_title", request.idea.title, parent.idea_title),
+        "description": ("idea_description", request.idea.description, parent.idea_description),
+        "category": ("idea_category", request.idea.category, parent.idea_category),
+    }
+    for field_name, (_, new_val, old_val) in field_map.items():
+        if str(new_val).strip() != str(old_val).strip():
+            changed.append(field_name)
+
+    # Compare metadata fields
+    meta_fields = [
+        "stage", "target_audience", "problem_statement", "price_point",
+        "existing_alternatives", "differentiator", "known_strengths", "known_risks",
+    ]
+    for field in meta_fields:
+        new_val = str(getattr(request.idea, field, "")).strip()
+        old_val = str(parent_meta.get(field, "")).strip()
+        if new_val != old_val:
+            changed.append(field)
+
+    # Compare config fields
+    config_fields = ["num_ticks", "population_size", "seed_count"]
+    for field in config_fields:
+        new_val = getattr(request.config, field, None)
+        old_val = parent_config.get(field)
+        if new_val != old_val:
+            changed.append(field)
+
+    return changed
 
 
 def _run_simulation_thread(
@@ -299,6 +372,7 @@ async def list_simulations(db: AsyncSession = Depends(get_db)):
         SimulationSummary(
             id=r.id, idea_title=r.idea_title, status=r.status,
             created_at=r.created_at, completed_at=r.completed_at, metrics=r.metrics,
+            parent_simulation_id=r.parent_simulation_id, variant_name=r.variant_name,
         )
         for r in records
     ]
@@ -315,9 +389,12 @@ async def get_simulation(simulation_id: str, db: AsyncSession = Depends(get_db))
     return SimulationDetail(
         id=record.id, idea_title=record.idea_title,
         idea_description=record.idea_description, idea_category=record.idea_category,
+        idea_metadata=record.idea_metadata,
         config=record.config, status=record.status,
         created_at=record.created_at, completed_at=record.completed_at,
         report=record.report, summary=record.summary, metrics=record.metrics,
+        parent_simulation_id=record.parent_simulation_id,
+        variant_name=record.variant_name, changed_fields=record.changed_fields,
     )
 
 
@@ -354,6 +431,102 @@ async def get_events(
          "event_type": e.event_type, "data": e.data}
         for e in events
     ]
+
+
+# ---------------------------------------------------------------------------
+# GET — Variant lineage endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/{simulation_id}/variants", response_model=list[SimulationSummary])
+async def list_variants(simulation_id: str, db: AsyncSession = Depends(get_db)):
+    """List all direct variants of a simulation."""
+    result = await db.execute(
+        select(SimulationRecord)
+        .where(SimulationRecord.parent_simulation_id == simulation_id)
+        .order_by(SimulationRecord.created_at.desc())
+    )
+    records = result.scalars().all()
+    return [
+        SimulationSummary(
+            id=r.id, idea_title=r.idea_title, status=r.status,
+            created_at=r.created_at, completed_at=r.completed_at, metrics=r.metrics,
+            parent_simulation_id=r.parent_simulation_id, variant_name=r.variant_name,
+        )
+        for r in records
+    ]
+
+
+@router.get("/{simulation_id}/compare/{variant_id}")
+async def compare_simulations(
+    simulation_id: str,
+    variant_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Compare a parent simulation with one of its variants."""
+    parent_result = await db.execute(
+        select(SimulationRecord).where(SimulationRecord.id == simulation_id)
+    )
+    parent = parent_result.scalar_one_or_none()
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent simulation not found")
+
+    variant_result = await db.execute(
+        select(SimulationRecord).where(SimulationRecord.id == variant_id)
+    )
+    variant = variant_result.scalar_one_or_none()
+    if not variant:
+        raise HTTPException(status_code=404, detail="Variant simulation not found")
+
+    if variant.parent_simulation_id != simulation_id:
+        raise HTTPException(
+            status_code=400, detail="Variant does not belong to this parent"
+        )
+
+    # Compute metrics delta
+    parent_metrics = parent.metrics or {}
+    variant_metrics = variant.metrics or {}
+    metrics_delta = {}
+    all_keys = set(parent_metrics.keys()) | set(variant_metrics.keys())
+    for key in all_keys:
+        p_val = parent_metrics.get(key, 0)
+        v_val = variant_metrics.get(key, 0)
+        if isinstance(p_val, (int, float)) and isinstance(v_val, (int, float)):
+            metrics_delta[key] = round(v_val - p_val, 4)
+
+    # Extract objections and segments from reports
+    parent_report = parent.report or {}
+    variant_report = variant.report or {}
+    parent_analysis = parent_report.get("analysis", {})
+    variant_analysis = variant_report.get("analysis", {})
+
+    return {
+        "parent": {
+            "id": parent.id,
+            "idea_title": parent.idea_title,
+            "metrics": parent_metrics,
+            "idea_metadata": parent.idea_metadata,
+            "config": parent.config,
+        },
+        "variant": {
+            "id": variant.id,
+            "idea_title": variant.idea_title,
+            "metrics": variant_metrics,
+            "idea_metadata": variant.idea_metadata,
+            "config": variant.config,
+            "variant_name": variant.variant_name,
+            "changed_fields": variant.changed_fields,
+        },
+        "diff": {
+            "changed_fields": variant.changed_fields or [],
+            "metrics_delta": metrics_delta,
+            "parent_top_objections": parent_analysis.get("top_objections", []),
+            "variant_top_objections": variant_analysis.get("top_objections", []),
+            "parent_segments": parent_analysis.get("segments", []),
+            "variant_segments": variant_analysis.get("segments", []),
+            "parent_adoption_likelihood": parent_analysis.get("adoption_likelihood"),
+            "variant_adoption_likelihood": variant_analysis.get("adoption_likelihood"),
+        },
+    }
 
 
 # ---------------------------------------------------------------------------

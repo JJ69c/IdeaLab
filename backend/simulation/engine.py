@@ -11,10 +11,12 @@ from backend.llm.client import llm_client
 from backend.simulation.convergence import ConvergenceTracker
 from backend.simulation.npc import Npc
 from backend.simulation.asset_signals import AssetSignals, compute_asset_adjustment
-from backend.simulation.product_profile import (
-    build_product_profile,
-    compute_npc_adjustment,
+from backend.simulation.evaluation import (
+    compute_archetype_baseline,
+    compute_individual_delta,
+    get_archetype_evaluation,
 )
+from backend.simulation.product_profile import build_product_profile
 from backend.simulation.propagation import (
     calculate_peer_influence,
     compute_discussion_weight,
@@ -118,7 +120,9 @@ def run_simulation(
         _run_tick(world, tick, emit)
 
         # Record convergence snapshot after all phases complete
-        convergence = tracker.record_tick(tick, world.aware_npcs)
+        convergence = tracker.record_tick(
+            tick, world.aware_npcs, npc_archetypes=world.npc_archetypes,
+        )
 
         metrics = world.compute_metrics()
         emit({
@@ -225,6 +229,10 @@ def _run_tick(world: WorldState, tick: int, emit: EventCallback):
                 })
         world.pending_spreads = []
 
+    # --- Exposure tracking (increment for all already-aware NPCs) ---
+    for npc in world.aware_npcs:
+        npc.state.increment_exposure()
+
     # --- Phase 2: Reaction (batched LLM calls) ---
     newly_aware = [n for n in world.npcs.values() if n.state.awareness_tick == tick]
     if newly_aware:
@@ -281,10 +289,19 @@ def _run_tick(world: WorldState, tick: int, emit: EventCallback):
 
 
 def _batch_react(world: WorldState, npcs: list[Npc], tick: int, emit: EventCallback):
-    """Get reactions for newly aware NPCs in batches."""
+    """Get reactions for newly aware NPCs in batches.
+
+    Score composition (deterministic-dominant):
+        archetype_baseline  (0.15-0.85)  from ProductProfile x archetype weights
+      + individual_delta    (+-0.10)     from trait deviation x ProductProfile
+      + asset_delta         (+-0.08)     from AssetSignals x traits
+      + llm_hint            (+-0.10)     LLM qualitative adjustment
+      = final interest_score (0-1)       clamped
+    """
     batch_size = settings.reaction_batch_size
     idea_dict = world.idea.to_dict()
     asset_signals_dict = world.asset_signals.to_dict() if getattr(world, "asset_signals", None) else None
+    profile = getattr(world, "product_profile", None)
 
     for i in range(0, len(npcs), batch_size):
         batch = npcs[i : i + batch_size]
@@ -295,7 +312,7 @@ def _batch_react(world: WorldState, npcs: list[Npc], tick: int, emit: EventCallb
         except Exception:
             logger.exception("LLM batch_react failed for batch starting at %d", i)
             reactions = [
-                {"npc_id": npc.id, "interest_score": 0.5, "stance": "indifferent",
+                {"npc_id": npc.id, "interest_adjustment": 0.0,
                  "reasoning": "Unable to process", "objections": [],
                  "would_pay": False, "would_recommend": False, "emotional_reaction": "meh"}
                 for npc in batch
@@ -305,21 +322,45 @@ def _batch_react(world: WorldState, npcs: list[Npc], tick: int, emit: EventCallb
         for npc in batch:
             reaction = reaction_map.get(npc.id, {})
 
-            # Stage A: per-NPC deterministic adjustment based on product profile
-            # Applied BEFORE apply_reaction so the LLM score gets grounded
-            profile = getattr(world, "product_profile", None)
-            if profile is not None:
+            # --- Deterministic baseline from archetype weights x ProductProfile ---
+            archetype_id = world.npc_archetypes.get(npc.id)
+            eval_def = get_archetype_evaluation(archetype_id)
+            baseline = compute_archetype_baseline(profile, eval_def) if profile else 0.5
+
+            # --- Individual trait variation (+-0.10) ---
+            ind_delta = compute_individual_delta(npc.personality, profile) if profile else 0.0
+
+            # --- Asset signal adjustment (+-0.08) ---
+            asset_delta = 0.0
+            signals = getattr(world, "asset_signals", None)
+            if signals is not None:
                 personality_dict = npc.to_profile_dict().get("personality", {})
-                adj = compute_npc_adjustment(profile, personality_dict)
+                asset_delta = compute_asset_adjustment(signals, personality_dict)
 
-                # Stage A.5: asset signal adjustment (additive)
-                signals = getattr(world, "asset_signals", None)
-                if signals is not None:
-                    adj += compute_asset_adjustment(signals, personality_dict)
-                    adj = max(-0.25, min(0.25, adj))  # expanded cap when assets present
+            # --- LLM hint (bounded +-0.10) ---
+            # The LLM now returns interest_adjustment instead of interest_score.
+            # Fallback: if old-style interest_score is returned, convert to delta from baseline.
+            raw_hint = reaction.get("interest_adjustment")
+            if raw_hint is None:
+                # Backward compat: if LLM still returns interest_score, treat as hint
+                old_score = reaction.get("interest_score", 0.5)
+                raw_hint = old_score - 0.5  # center around 0
+            llm_hint = max(-0.10, min(0.10, float(raw_hint)))
 
-                raw_score = reaction.get("interest_score", 0.5)
-                reaction["interest_score"] = max(0.0, min(1.0, raw_score + adj))
+            # --- Compose final score ---
+            final_score = max(0.0, min(1.0, baseline + ind_delta + asset_delta + llm_hint))
+            reaction["interest_score"] = final_score
+
+            logger.debug(
+                "NPC %s (%s): baseline=%.3f ind=%.3f asset=%.3f llm=%.3f → final=%.3f",
+                npc.id, archetype_id or "?",
+                baseline, ind_delta, asset_delta, llm_hint, final_score,
+            )
+
+            # Cache baseline on world for later use (influence resistance floor)
+            if not hasattr(world, "_npc_baselines"):
+                world._npc_baselines = {}
+            world._npc_baselines[npc.id] = baseline
 
             new_stance = npc.state.apply_reaction(reaction, tick)
 
@@ -335,6 +376,10 @@ def _batch_react(world: WorldState, npcs: list[Npc], tick: int, emit: EventCallb
                     "objections": npc.state.objections,
                     "would_pay": npc.state.would_pay,
                     "emotional_reaction": npc.state.emotional_reaction,
+                    "baseline": round(baseline, 3),
+                    "individual_delta": round(ind_delta, 3),
+                    "asset_delta": round(asset_delta, 3),
+                    "llm_hint": round(llm_hint, 3),
                 },
             })
 
@@ -352,6 +397,7 @@ def _batch_react(world: WorldState, npcs: list[Npc], tick: int, emit: EventCallb
 
             world.log_event(tick, npc.id, "reacted", {
                 "stance": npc.state.stance, "interest": npc.state.interest_score,
+                "baseline": round(baseline, 3),
             })
 
 
@@ -395,9 +441,11 @@ def _run_discussion(
     # A's shift is caused by B speaking → B is source, A is target.
     a_weight = compute_discussion_weight(
         npc_b.personality.social_influence, trust, npc_a.personality.skepticism,
+        source_archetype=getattr(npc_b, "archetype", None),
     )
     b_weight = compute_discussion_weight(
         npc_a.personality.social_influence, trust, npc_b.personality.skepticism,
+        source_archetype=getattr(npc_a, "archetype", None),
     )
     a_delta = round(raw_a_delta * a_weight, 4)
     b_delta = round(raw_b_delta * b_weight, 4)

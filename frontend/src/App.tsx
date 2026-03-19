@@ -3,6 +3,7 @@ import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import Inject from './pages/Inject'
 import Report from './pages/Report'
+import Compare from './pages/Compare'
 import LiveSimulation from './pages/LiveSimulation'
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/inject" element={<Inject />} />
               <Route path="/report/:id" element={<Report />} />
+              <Route path="/compare/:variantId" element={<Compare />} />
             </Routes>
           </main>
         </div>

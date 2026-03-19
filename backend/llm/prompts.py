@@ -2,12 +2,21 @@
 
 REACTION_SYSTEM = """You are simulating how different people react to a new product or idea.
 You will receive a list of persona profiles and a description of an idea.
-For each persona, generate a realistic reaction based on their personality, interests, and circumstances.
+For each persona, generate a realistic qualitative reaction based on their personality, archetype, and circumstances.
+
+IMPORTANT: You do NOT decide the interest score. The system computes a deterministic baseline
+from the product's structural properties and the persona's archetype. You provide:
+1. Qualitative reasoning (WHY this person feels the way they do)
+2. Specific objections grounded in their personality
+3. A small interest_adjustment (-0.10 to +0.10) ONLY if your qualitative analysis reveals
+   something the structural model cannot capture (e.g., a specific pain point match,
+   a cultural concern, a personal experience factor). Stay near 0.0 by default.
 
 Rules:
-- Stay in character for each persona. A skeptical person should be skeptical. An early adopter should be excited.
-- Be specific. Reference the persona's actual interests and pain points.
-- Reactions should feel distinct. Not everyone reacts the same way.
+- Stay in character. A skeptic should be skeptical. An early adopter should be excited.
+- Reference the persona's actual interests, pain points, and decision style.
+- Reactions should feel distinct across personas.
+- The interest_adjustment is a HINT, not a score. Keep it small and justified.
 - Output valid JSON only. No markdown, no explanation."""
 
 REACTION_USER = """## Idea Being Introduced
@@ -29,10 +38,9 @@ Return a JSON array with one object per persona, in the same order:
 [
   {{
     "npc_id": "the persona's id",
-    "interest_score": 0.0 to 1.0,
-    "stance": "interested" | "curious" | "indifferent" | "skeptical" | "opposed",
-    "reasoning": "1-2 sentence explanation of WHY this person feels this way, referencing their specific traits",
-    "objections": ["list of specific concerns, if any"],
+    "interest_adjustment": -0.10 to +0.10 (small qualitative hint — stay near 0.0 unless strong reason),
+    "reasoning": "1-2 sentence explanation of WHY this person feels this way, referencing their specific traits and decision style",
+    "objections": ["list of specific concerns grounded in their archetype and personality, if any"],
     "would_pay": true or false,
     "would_recommend": true or false,
     "emotional_reaction": "one word: excited, intrigued, meh, doubtful, annoyed"
@@ -299,17 +307,27 @@ You are participating in a focus group discussion about a new product idea.
 def format_persona_for_prompt(npc: dict) -> str:
     """Format a single NPC profile into a readable text block for prompts."""
     personality = npc.get("personality", {})
-    return (
-        f"ID: {npc['id']}\n"
-        f"Name: {npc['name']}, Age: {npc['age']}, Occupation: {npc['occupation']}\n"
-        f"Income: {npc.get('income_level', 'middle')}\n"
+    archetype = npc.get("archetype", "")
+    decision_style = npc.get("decision_style", "")
+
+    lines = [
+        f"ID: {npc['id']}",
+        f"Name: {npc['name']}, Age: {npc['age']}, Occupation: {npc['occupation']}",
+        f"Income: {npc.get('income_level', 'middle')}",
+    ]
+    if archetype:
+        lines.append(f"Archetype: {archetype}")
+    if decision_style:
+        lines.append(f"Decision style: {decision_style}")
+    lines.extend([
         f"Personality: openness={personality.get('openness', 0.5)}, "
         f"skepticism={personality.get('skepticism', 0.5)}, "
         f"tech_savviness={personality.get('tech_savviness', 0.5)}, "
         f"price_sensitivity={personality.get('price_sensitivity', 0.5)}, "
-        f"novelty_seeking={personality.get('novelty_seeking', 0.5)}\n"
-        f"Interests: {', '.join(npc.get('interests', []))}\n"
-        f"Values: {', '.join(npc.get('values', []))}\n"
-        f"Pain points: {', '.join(npc.get('pain_points', []))}\n"
-        f"Style: {npc.get('communication_style', 'neutral')}"
-    )
+        f"novelty_seeking={personality.get('novelty_seeking', 0.5)}",
+        f"Interests: {', '.join(npc.get('interests', []))}",
+        f"Values: {', '.join(npc.get('values', []))}",
+        f"Pain points: {', '.join(npc.get('pain_points', []))}",
+        f"Style: {npc.get('communication_style', 'neutral')}",
+    ])
+    return "\n".join(lines)

@@ -21,8 +21,21 @@
         "conformity":        {"min": 0.20, "max": 0.40},
         "novelty_seeking":   {"min": 0.80, "max": 0.95}
       },
+      "evaluation_weights": {
+        "novelty": 0.25,
+        "differentiation": 0.15,
+        "identity_fit": 0.15,
+        "utility_clarity": 0.10,
+        "trust_barrier": -0.05,
+        "price_friction": -0.10,
+        "trial_friction": -0.10,
+        "market_saturation": -0.10
+      },
+      "adoption_threshold": 0.60,
+      "resistance_floor": 0.0,
+      "susceptibility_multiplier": 0.8,
       "count_range": [4, 5],
-      "preferred_connections": ["enthusiast", "gatekeeper", "pragmatist"]
+      "preferred_connections": ["enthusiast", "gatekeeper", "pragmatist", "brand_buyer"]
     },
     {
       "id": "pragmatist",
@@ -46,8 +59,21 @@
         "conformity":        {"min": 0.40, "max": 0.60},
         "novelty_seeking":   {"min": 0.20, "max": 0.45}
       },
+      "evaluation_weights": {
+        "utility_clarity": 0.25,
+        "differentiation": 0.15,
+        "identity_fit": 0.10,
+        "novelty": 0.05,
+        "price_friction": -0.15,
+        "trial_friction": -0.10,
+        "trust_barrier": -0.10,
+        "market_saturation": -0.10
+      },
+      "adoption_threshold": 0.65,
+      "resistance_floor": 0.0,
+      "susceptibility_multiplier": 0.6,
       "count_range": [8, 10],
-      "preferred_connections": ["pragmatist", "follower", "gatekeeper", "budget_conscious"]
+      "preferred_connections": ["pragmatist", "follower", "gatekeeper", "budget_conscious", "loyal_incumbent"]
     },
     {
       "id": "skeptic",
@@ -71,8 +97,21 @@
         "conformity":        {"min": 0.15, "max": 0.40},
         "novelty_seeking":   {"min": 0.05, "max": 0.25}
       },
+      "evaluation_weights": {
+        "utility_clarity": 0.20,
+        "differentiation": 0.15,
+        "identity_fit": 0.10,
+        "trust_barrier": -0.20,
+        "price_friction": -0.10,
+        "trial_friction": -0.10,
+        "market_saturation": -0.10,
+        "novelty": -0.05
+      },
+      "adoption_threshold": 0.70,
+      "resistance_floor": 0.35,
+      "susceptibility_multiplier": 0.4,
       "count_range": [5, 6],
-      "preferred_connections": ["gatekeeper", "pragmatist", "skeptic"]
+      "preferred_connections": ["gatekeeper", "pragmatist", "skeptic", "values_buyer"]
     },
     {
       "id": "follower",
@@ -96,8 +135,21 @@
         "conformity":        {"min": 0.70, "max": 0.90},
         "novelty_seeking":   {"min": 0.15, "max": 0.40}
       },
+      "evaluation_weights": {
+        "market_saturation": 0.15,
+        "identity_fit": 0.15,
+        "utility_clarity": 0.10,
+        "differentiation": 0.05,
+        "trust_barrier": -0.20,
+        "price_friction": -0.15,
+        "trial_friction": -0.10,
+        "novelty": -0.05
+      },
+      "adoption_threshold": 0.60,
+      "resistance_floor": 0.0,
+      "susceptibility_multiplier": 1.2,
       "count_range": [6, 8],
-      "preferred_connections": ["pragmatist", "follower", "budget_conscious"]
+      "preferred_connections": ["pragmatist", "follower", "budget_conscious", "brand_buyer"]
     },
     {
       "id": "gatekeeper",
@@ -121,8 +173,21 @@
         "conformity":        {"min": 0.10, "max": 0.30},
         "novelty_seeking":   {"min": 0.30, "max": 0.55}
       },
+      "evaluation_weights": {
+        "utility_clarity": 0.20,
+        "differentiation": 0.20,
+        "novelty": 0.10,
+        "identity_fit": 0.05,
+        "trust_barrier": -0.15,
+        "trial_friction": -0.15,
+        "price_friction": -0.05,
+        "market_saturation": -0.10
+      },
+      "adoption_threshold": 0.65,
+      "resistance_floor": 0.30,
+      "susceptibility_multiplier": 0.5,
       "count_range": [3, 4],
-      "preferred_connections": ["enthusiast", "skeptic", "pragmatist"]
+      "preferred_connections": ["enthusiast", "skeptic", "pragmatist", "health_evaluator"]
     },
     {
       "id": "budget_conscious",
@@ -146,8 +211,173 @@
         "conformity":        {"min": 0.40, "max": 0.65},
         "novelty_seeking":   {"min": 0.20, "max": 0.50}
       },
+      "evaluation_weights": {
+        "utility_clarity": 0.20,
+        "identity_fit": 0.05,
+        "novelty": 0.05,
+        "differentiation": 0.05,
+        "price_friction": -0.30,
+        "trial_friction": -0.15,
+        "trust_barrier": -0.10,
+        "market_saturation": -0.10
+      },
+      "adoption_threshold": 0.60,
+      "resistance_floor": 0.0,
+      "susceptibility_multiplier": 0.7,
       "count_range": [4, 5],
-      "preferred_connections": ["follower", "pragmatist", "budget_conscious"]
+      "preferred_connections": ["follower", "pragmatist", "budget_conscious", "loyal_incumbent"]
+    },
+    {
+      "id": "health_evaluator",
+      "label": "Health-Conscious Evaluator",
+      "decision_style": "Safety-first. Evaluates health/wellness claims critically. Values evidence-based products but deeply engaged when trust is earned.",
+      "adoption_path": "awareness → is this safe? → checks credentials/evidence → cautious trial → loyal adopter if trust established",
+      "typical_objections": [
+        "Where are the clinical studies?",
+        "Is this FDA approved or certified?",
+        "What are the side effects or risks?",
+        "Who reviewed or endorsed this?"
+      ],
+      "influence_susceptibility": "high_evidence, moderate_trusted_peer, low_hype",
+      "spread_likelihood": "moderate_within_health_community",
+      "traits": {
+        "openness":          {"min": 0.30, "max": 0.55},
+        "skepticism":        {"min": 0.55, "max": 0.80},
+        "tech_savviness":    {"min": 0.30, "max": 0.60},
+        "price_sensitivity": {"min": 0.35, "max": 0.60},
+        "social_influence":  {"min": 0.30, "max": 0.55},
+        "conformity":        {"min": 0.40, "max": 0.65},
+        "novelty_seeking":   {"min": 0.15, "max": 0.40}
+      },
+      "evaluation_weights": {
+        "identity_fit": 0.20,
+        "utility_clarity": 0.15,
+        "differentiation": 0.10,
+        "novelty": 0.05,
+        "trust_barrier": -0.25,
+        "price_friction": -0.10,
+        "trial_friction": -0.10,
+        "market_saturation": -0.05
+      },
+      "adoption_threshold": 0.70,
+      "resistance_floor": 0.35,
+      "susceptibility_multiplier": 0.5,
+      "count_range": [3, 5],
+      "preferred_connections": ["pragmatist", "values_buyer", "skeptic", "gatekeeper"]
+    },
+    {
+      "id": "brand_buyer",
+      "label": "Brand-Sensitive Buyer",
+      "decision_style": "Aesthetics-first. Drawn to polished brands, premium experiences, and trend-forward products. Premium pricing signals quality.",
+      "adoption_path": "awareness → does this look good? → brand/aesthetic evaluation → adopts if it enhances identity → shares for social capital",
+      "typical_objections": [
+        "The branding feels generic",
+        "This doesn't feel premium enough",
+        "I've never heard of this brand",
+        "The design is outdated"
+      ],
+      "influence_susceptibility": "high_brand, high_social, moderate_novelty, low_price_sensitivity",
+      "spread_likelihood": "high_if_aspirational",
+      "traits": {
+        "openness":          {"min": 0.60, "max": 0.85},
+        "skepticism":        {"min": 0.15, "max": 0.40},
+        "tech_savviness":    {"min": 0.40, "max": 0.70},
+        "price_sensitivity": {"min": 0.10, "max": 0.30},
+        "social_influence":  {"min": 0.60, "max": 0.85},
+        "conformity":        {"min": 0.30, "max": 0.55},
+        "novelty_seeking":   {"min": 0.55, "max": 0.80}
+      },
+      "evaluation_weights": {
+        "identity_fit": 0.25,
+        "differentiation": 0.15,
+        "novelty": 0.15,
+        "price_friction": 0.05,
+        "trust_barrier": -0.10,
+        "trial_friction": -0.10,
+        "utility_clarity": -0.05,
+        "market_saturation": -0.15
+      },
+      "adoption_threshold": 0.60,
+      "resistance_floor": 0.0,
+      "susceptibility_multiplier": 0.9,
+      "count_range": [3, 5],
+      "preferred_connections": ["enthusiast", "brand_buyer", "follower"]
+    },
+    {
+      "id": "values_buyer",
+      "label": "Values-Driven Buyer",
+      "decision_style": "Mission-first. Evaluates products through ethical, environmental, or social impact lens. Will pay more for aligned values.",
+      "adoption_path": "awareness → does this align with my values? → investigates mission/impact → adopts if authentic → becomes advocate",
+      "typical_objections": [
+        "Is this company actually ethical or just greenwashing?",
+        "What's their environmental impact?",
+        "Do they treat workers fairly?",
+        "I need to see proof of their claims"
+      ],
+      "influence_susceptibility": "high_mission, moderate_trusted_peer, low_hype, low_price",
+      "spread_likelihood": "moderate_within_values_community",
+      "traits": {
+        "openness":          {"min": 0.50, "max": 0.75},
+        "skepticism":        {"min": 0.50, "max": 0.75},
+        "tech_savviness":    {"min": 0.30, "max": 0.60},
+        "price_sensitivity": {"min": 0.30, "max": 0.55},
+        "social_influence":  {"min": 0.35, "max": 0.55},
+        "conformity":        {"min": 0.15, "max": 0.40},
+        "novelty_seeking":   {"min": 0.25, "max": 0.50}
+      },
+      "evaluation_weights": {
+        "identity_fit": 0.30,
+        "differentiation": 0.15,
+        "utility_clarity": 0.10,
+        "novelty": 0.05,
+        "trust_barrier": -0.15,
+        "price_friction": -0.10,
+        "trial_friction": -0.10,
+        "market_saturation": -0.05
+      },
+      "adoption_threshold": 0.70,
+      "resistance_floor": 0.30,
+      "susceptibility_multiplier": 0.3,
+      "count_range": [3, 4],
+      "preferred_connections": ["values_buyer", "skeptic", "gatekeeper", "health_evaluator"]
+    },
+    {
+      "id": "loyal_incumbent",
+      "label": "Loyal Incumbent User",
+      "decision_style": "Inertia-first. Deeply invested in current solutions. High switching costs make new products feel threatening, not exciting.",
+      "adoption_path": "awareness → I already have something for this → resists unless current solution fails → very slow migration → strong retention once switched",
+      "typical_objections": [
+        "I already use something that works fine",
+        "The switching cost isn't worth it",
+        "My whole workflow depends on what I have now",
+        "What if this new thing disappears in a year?"
+      ],
+      "influence_susceptibility": "very_low_marketing, low_peer, moderate_if_current_fails",
+      "spread_likelihood": "very_low",
+      "traits": {
+        "openness":          {"min": 0.10, "max": 0.30},
+        "skepticism":        {"min": 0.60, "max": 0.85},
+        "tech_savviness":    {"min": 0.40, "max": 0.70},
+        "price_sensitivity": {"min": 0.45, "max": 0.70},
+        "social_influence":  {"min": 0.15, "max": 0.40},
+        "conformity":        {"min": 0.50, "max": 0.75},
+        "novelty_seeking":   {"min": 0.05, "max": 0.20}
+      },
+      "evaluation_weights": {
+        "differentiation": 0.20,
+        "market_saturation": 0.10,
+        "utility_clarity": 0.05,
+        "trial_friction": -0.25,
+        "trust_barrier": -0.15,
+        "price_friction": -0.10,
+        "novelty": -0.10,
+        "identity_fit": -0.05
+      },
+      "adoption_threshold": 0.75,
+      "resistance_floor": 0.40,
+      "susceptibility_multiplier": 0.3,
+      "count_range": [3, 4],
+      "preferred_connections": ["pragmatist", "loyal_incumbent", "budget_conscious", "skeptic"]
     }
   ],
 
@@ -155,36 +385,41 @@
     "balanced": {
       "label": "Balanced General Market",
       "composition": {
-        "enthusiast": 4, "pragmatist": 9, "skeptic": 5,
-        "follower": 7, "gatekeeper": 3, "budget_conscious": 2
+        "enthusiast": 3, "pragmatist": 6, "skeptic": 3,
+        "follower": 4, "gatekeeper": 2, "budget_conscious": 2,
+        "health_evaluator": 3, "brand_buyer": 2, "values_buyer": 3, "loyal_incumbent": 2
       }
     },
     "young_consumer": {
       "label": "Young Consumer Market",
       "composition": {
-        "enthusiast": 7, "pragmatist": 5, "skeptic": 2,
-        "follower": 9, "gatekeeper": 2, "budget_conscious": 5
+        "enthusiast": 5, "pragmatist": 3, "skeptic": 1,
+        "follower": 7, "gatekeeper": 1, "budget_conscious": 4,
+        "health_evaluator": 1, "brand_buyer": 5, "values_buyer": 2, "loyal_incumbent": 1
+      }
+    },
+    "health_conscious": {
+      "label": "Health-Conscious Market",
+      "composition": {
+        "enthusiast": 2, "pragmatist": 4, "skeptic": 3,
+        "follower": 3, "gatekeeper": 2, "budget_conscious": 2,
+        "health_evaluator": 6, "brand_buyer": 1, "values_buyer": 5, "loyal_incumbent": 2
       }
     },
     "skeptical": {
       "label": "Saturated Skeptical Market",
       "composition": {
-        "enthusiast": 2, "pragmatist": 8, "skeptic": 9,
-        "follower": 4, "gatekeeper": 4, "budget_conscious": 3
+        "enthusiast": 1, "pragmatist": 5, "skeptic": 6,
+        "follower": 2, "gatekeeper": 3, "budget_conscious": 3,
+        "health_evaluator": 2, "brand_buyer": 1, "values_buyer": 2, "loyal_incumbent": 5
       }
     },
     "premium": {
       "label": "Premium-Friendly Market",
       "composition": {
-        "enthusiast": 6, "pragmatist": 8, "skeptic": 3,
-        "follower": 5, "gatekeeper": 5, "budget_conscious": 3
-      }
-    },
-    "price_sensitive": {
-      "label": "Price-Sensitive Market",
-      "composition": {
-        "enthusiast": 2, "pragmatist": 7, "skeptic": 4,
-        "follower": 6, "gatekeeper": 2, "budget_conscious": 9
+        "enthusiast": 4, "pragmatist": 5, "skeptic": 2,
+        "follower": 3, "gatekeeper": 3, "budget_conscious": 1,
+        "health_evaluator": 2, "brand_buyer": 5, "values_buyer": 3, "loyal_incumbent": 2
       }
     }
   },
@@ -197,7 +432,10 @@
     "Samantha Blake", "Kevin Tran", "Dorothy Evans", "Rachel Andersen", "Omar Hassan",
     "Emily Zhang", "Frank Russo", "Maria Gonzalez", "Chris Lawson", "Lisa Brennan",
     "Andre Williams", "Sofia Reyes", "Victor Johansson", "Mei Lin Wu", "Carlos Ortega",
-    "Hannah Park", "Daniel Okafor", "Yuki Tanaka", "Benjamin Cole", "Fatima Al-Rashid"
+    "Hannah Park", "Daniel Okafor", "Yuki Tanaka", "Benjamin Cole", "Fatima Al-Rashid",
+    "Julian Archer", "Rosa Delgado", "Isaac Nwosu", "Leah Silverman", "Tariq Mahmoud",
+    "Ingrid Larsson", "Oscar Huang", "Vera Popova", "Nathan Ferreira", "Amara Diallo",
+    "Ethan Whitmore", "Chloe Baptiste"
   ],
 
   "occupation_pool": {
@@ -206,7 +444,11 @@
     "skeptic":          ["Risk Analyst", "Quality Assurance Lead", "Compliance Officer", "Security Consultant", "Auditor", "Regulatory Specialist"],
     "follower":         ["Administrative Assistant", "HR Coordinator", "Customer Support Rep", "Sales Associate", "Office Manager", "Retail Manager"],
     "gatekeeper":       ["Software Architect", "CTO", "Engineering Lead", "Data Scientist", "Research Director", "Technical Advisor"],
-    "budget_conscious": ["Freelance Writer", "Graduate Student", "Teacher", "Small Business Owner", "Nonprofit Coordinator", "Part-Time Consultant"]
+    "budget_conscious": ["Freelance Writer", "Graduate Student", "Teacher", "Small Business Owner", "Nonprofit Coordinator", "Part-Time Consultant"],
+    "health_evaluator": ["Nutritionist", "Wellness Coach", "Physical Therapist", "Health Researcher", "Public Health Analyst", "Fitness Instructor"],
+    "brand_buyer":      ["Fashion Designer", "Art Director", "Brand Consultant", "Interior Designer", "Social Media Influencer", "Luxury Retail Manager"],
+    "values_buyer":     ["Environmental Scientist", "Social Worker", "NGO Director", "Ethics Consultant", "Community Organizer", "Sustainability Manager"],
+    "loyal_incumbent":  ["IT Administrator", "Database Manager", "Legacy Systems Developer", "Procurement Officer", "Operations Analyst", "Facilities Manager"]
   },
 
   "income_pool": {
@@ -215,6 +457,10 @@
     "skeptic":          ["middle", "upper_middle", "low"],
     "follower":         ["low", "middle"],
     "gatekeeper":       ["upper_middle", "high"],
-    "budget_conscious": ["low", "middle"]
+    "budget_conscious": ["low", "middle"],
+    "health_evaluator": ["middle", "upper_middle"],
+    "brand_buyer":      ["upper_middle", "high"],
+    "values_buyer":     ["low", "middle", "upper_middle"],
+    "loyal_incumbent":  ["middle", "upper_middle"]
   }
 }

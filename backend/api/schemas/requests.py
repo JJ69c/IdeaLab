@@ -46,3 +46,9 @@ class CreateSimulationRequest(BaseModel):
     idea: IdeaInput
     config: SimulationConfigInput = SimulationConfigInput()
     asset_refs: list[AssetReference] = Field(default_factory=list, max_length=5)
+    parent_simulation_id: str | None = Field(
+        default=None, description="ID of the parent simulation (for variants)"
+    )
+    variant_name: str | None = Field(
+        default=None, max_length=200, description="Label for this variant (e.g. 'Lower price test')"
+    )

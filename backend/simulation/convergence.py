@@ -45,6 +45,11 @@ class ConvergenceState:
     interest_delta: float = 0.0       # mean interest change from last tick
     stability_streak: int = 0         # consecutive ticks with |delta| < threshold
 
+    # Variance stability: is the spread of opinions stabilizing?
+    variance_stable: bool = False
+    variance_delta: float = 0.0       # variance change from last tick
+    variance_streak: int = 0          # consecutive ticks with small variance change
+
     # Polarization: is the population splitting?
     polarization_score: float = 0.0   # 0 = consensus, 1 = fully bimodal
     polarized: bool = False
@@ -52,6 +57,12 @@ class ConvergenceState:
     # Objection convergence: are concerns concentrating or fragmenting?
     objection_concentration: float = 0.0  # 0 = fragmented, 1 = single dominant objection
     top_objections: list[str] = field(default_factory=list)
+
+    # Archetype coherence: do NPCs in the same archetype agree?
+    archetype_coherence: dict[str, float] = field(default_factory=dict)  # archetype_id → std dev
+
+    # Result classification
+    result_class: str = "unknown"  # stable_convergence | stable_polarization | unstable | noisy
 
     # Overall
     converged: bool = False           # stable + low polarization change
@@ -61,10 +72,14 @@ class ConvergenceState:
             "interest_stable": self.interest_stable,
             "interest_delta": round(self.interest_delta, 4),
             "stability_streak": self.stability_streak,
+            "variance_stable": self.variance_stable,
+            "variance_delta": round(self.variance_delta, 4),
             "polarization_score": round(self.polarization_score, 3),
             "polarized": self.polarized,
             "objection_concentration": round(self.objection_concentration, 3),
             "top_objections": self.top_objections[:5],
+            "archetype_coherence": {k: round(v, 4) for k, v in self.archetype_coherence.items()},
+            "result_class": self.result_class,
             "converged": self.converged,
         }
 
@@ -74,19 +89,28 @@ class ConvergenceTracker:
 
     STABILITY_THRESHOLD = 0.015  # mean interest must move less than this
     STABILITY_STREAK_REQUIRED = 2  # consecutive stable ticks to declare stable
+    VARIANCE_STABILITY_THRESHOLD = 0.01  # variance must change less than this
+    VARIANCE_STREAK_REQUIRED = 2
     POLARIZATION_THRESHOLD = 0.35  # above this → polarized
+    COHERENCE_NOISY_THRESHOLD = 0.18  # avg archetype std dev above this → noisy
 
     def __init__(self):
         self.snapshots: list[TickSnapshot] = []
         self._all_objections: Counter[str] = Counter()
         self.state = ConvergenceState()
 
-    def record_tick(self, tick: int, aware_npcs: list) -> ConvergenceState:
+    def record_tick(
+        self,
+        tick: int,
+        aware_npcs: list,
+        npc_archetypes: dict[str, str] | None = None,
+    ) -> ConvergenceState:
         """Record a snapshot at the end of a tick and update convergence state.
 
         Args:
             tick: Current tick number.
             aware_npcs: List of NPC objects that are aware of the idea.
+            npc_archetypes: Optional mapping of npc_id → archetype_id for coherence.
 
         Returns:
             Updated ConvergenceState.
@@ -112,8 +136,12 @@ class ConvergenceTracker:
             self._all_objections[_normalize_objection(obj)] += 1
 
         self._update_stability(snap)
+        self._update_variance_stability(snap)
         self._update_polarization(snap)
         self._update_objection_convergence()
+        if npc_archetypes:
+            self._update_archetype_coherence(aware_npcs, npc_archetypes)
+        self._update_result_class()
         self._update_overall()
 
         return self.state
@@ -201,9 +229,88 @@ class ConvergenceTracker:
                 (hhi - min_hhi) / (1.0 - min_hhi), 3
             )
 
+    def _update_variance_stability(self, snap: TickSnapshot):
+        """Track whether the spread (variance) of opinions is stabilizing."""
+        if len(self.snapshots) < 2:
+            self.state.variance_delta = 0.0
+            self.state.variance_stable = False
+            self.state.variance_streak = 0
+            return
+
+        prev = self.snapshots[-2]
+        delta = abs(snap.interest_variance - prev.interest_variance)
+        self.state.variance_delta = snap.interest_variance - prev.interest_variance
+
+        if delta < self.VARIANCE_STABILITY_THRESHOLD:
+            self.state.variance_streak += 1
+        else:
+            self.state.variance_streak = 0
+
+        self.state.variance_stable = (
+            self.state.variance_streak >= self.VARIANCE_STREAK_REQUIRED
+        )
+
+    def _update_archetype_coherence(
+        self, aware_npcs: list, npc_archetypes: dict[str, str]
+    ):
+        """Compute within-archetype standard deviation of interest scores.
+
+        Low std dev (< 0.12) means archetype behavior is consistent.
+        High std dev (> 0.18) means LLM noise is overwhelming archetype signal.
+        """
+        from collections import defaultdict
+
+        groups: dict[str, list[float]] = defaultdict(list)
+        for npc in aware_npcs:
+            arch_id = npc_archetypes.get(npc.id) or getattr(npc, "archetype", None)
+            if arch_id:
+                groups[arch_id].append(npc.state.interest_score)
+
+        coherence: dict[str, float] = {}
+        for arch_id, scores in groups.items():
+            if len(scores) < 2:
+                coherence[arch_id] = 0.0
+                continue
+            mu = sum(scores) / len(scores)
+            variance = sum((s - mu) ** 2 for s in scores) / len(scores)
+            coherence[arch_id] = math.sqrt(variance)
+
+        self.state.archetype_coherence = coherence
+
+    def _update_result_class(self):
+        """Classify simulation result into one of four categories.
+
+        - stable_convergence: interest stable AND variance stable AND NOT polarized
+        - stable_polarization: interest stable AND variance stable AND polarized
+        - noisy: average archetype coherence std dev > threshold
+        - unstable: none of the above after sufficient ticks
+        """
+        if len(self.snapshots) < 3:
+            self.state.result_class = "unknown"
+            return
+
+        # Check for noisy first (LLM overwhelming deterministic signal)
+        if self.state.archetype_coherence:
+            avg_std = sum(self.state.archetype_coherence.values()) / len(
+                self.state.archetype_coherence
+            )
+            if avg_std > self.COHERENCE_NOISY_THRESHOLD:
+                self.state.result_class = "noisy"
+                return
+
+        both_stable = self.state.interest_stable and self.state.variance_stable
+
+        if both_stable and not self.state.polarized:
+            self.state.result_class = "stable_convergence"
+        elif both_stable and self.state.polarized:
+            self.state.result_class = "stable_polarization"
+        else:
+            self.state.result_class = "unstable"
+
     def _update_overall(self):
         self.state.converged = (
             self.state.interest_stable
+            and self.state.variance_stable
             and not self.state.polarized
             and len(self.snapshots) >= 3
         )

@@ -2,12 +2,24 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
+interface VariantSummary {
+  id: string
+  idea_title: string
+  status: string
+  variant_name: string | null
+  metrics: Record<string, number> | null
+  created_at: string
+}
+
 interface SimDetail {
   id: string
   idea_title: string
   idea_description: string
   status: string
   metrics: Record<string, number> | null
+  parent_simulation_id: string | null
+  variant_name: string | null
+  changed_fields: string[] | null
   report: {
     metrics: Record<string, number>
     analysis: {
@@ -40,13 +52,30 @@ export default function Report() {
   const { id } = useParams<{ id: string }>()
   const [sim, setSim] = useState<SimDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [variants, setVariants] = useState<VariantSummary[]>([])
+  const [parentTitle, setParentTitle] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
     fetch(`/api/simulations/${id}`)
       .then(r => r.json())
-      .then(data => { setSim(data); setLoading(false) })
+      .then(data => {
+        setSim(data)
+        setLoading(false)
+        // Fetch parent title if this is a variant
+        if (data.parent_simulation_id) {
+          fetch(`/api/simulations/${data.parent_simulation_id}`)
+            .then(r => r.json())
+            .then(parent => setParentTitle(parent.idea_title))
+            .catch(() => {})
+        }
+      })
       .catch(() => setLoading(false))
+    // Fetch variants of this simulation
+    fetch(`/api/simulations/${id}/variants`)
+      .then(r => r.json())
+      .then(data => setVariants(data))
+      .catch(() => {})
   }, [id])
 
   if (loading) return <p className="text-gray-500">Loading report...</p>
@@ -68,15 +97,44 @@ export default function Report() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center gap-4">
-        <Link to="/dashboard" className="text-indigo-600 text-sm">&larr; Dashboard</Link>
-        <h1 className="text-2xl font-bold flex-1">{sim.idea_title}</h1>
-        <Link
-          to={`/simulation/${id}`}
-          className="text-sm bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
-        >
-          View Simulation Map
-        </Link>
+      <div className="space-y-3">
+        <div className="flex items-center gap-4">
+          <Link to="/dashboard" className="text-indigo-600 text-sm">&larr; Dashboard</Link>
+          <h1 className="text-2xl font-bold flex-1">{sim.idea_title}</h1>
+          <Link
+            to={`/inject?variant_of=${id}`}
+            className="text-sm border border-indigo-600 text-indigo-600 px-4 py-2 rounded-lg hover:bg-indigo-50"
+          >
+            Create Variant
+          </Link>
+          <Link
+            to={`/simulation/${id}`}
+            className="text-sm bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+          >
+            View Simulation Map
+          </Link>
+        </div>
+
+        {sim.parent_simulation_id && (
+          <div className="flex items-center gap-3 text-sm">
+            <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+              Variant{sim.variant_name ? `: ${sim.variant_name}` : ''}
+            </span>
+            <span className="text-gray-500">of</span>
+            <Link
+              to={`/report/${sim.parent_simulation_id}`}
+              className="text-indigo-600 underline hover:text-indigo-800"
+            >
+              {parentTitle || 'Original simulation'}
+            </Link>
+            <Link
+              to={`/compare/${id}`}
+              className="ml-auto text-sm border border-green-600 text-green-700 px-3 py-1 rounded-lg hover:bg-green-50"
+            >
+              Compare with Original
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Executive Summary */}
@@ -240,6 +298,43 @@ export default function Report() {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {/* Variants */}
+      {variants.length > 0 && (
+        <section className="bg-white rounded-lg border p-6">
+          <h2 className="text-lg font-semibold mb-4">Variants</h2>
+          <div className="space-y-2">
+            {variants.map(v => (
+              <Link
+                key={v.id}
+                to={`/report/${v.id}`}
+                className="block border rounded-lg p-3 hover:border-indigo-300 transition-colors"
+              >
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="font-medium text-sm">{v.idea_title}</span>
+                    {v.variant_name && (
+                      <span className="ml-2 text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded">
+                        {v.variant_name}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-3 text-xs text-gray-500">
+                    <span className={v.status === 'completed' ? 'text-green-600' : 'text-yellow-600'}>
+                      {v.status}
+                    </span>
+                    {v.metrics && (
+                      <span>
+                        Interest: {((v.metrics.interest_rate ?? 0) * 100).toFixed(0)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
         </section>
       )}
     </div>

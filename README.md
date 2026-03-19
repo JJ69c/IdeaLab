@@ -8,8 +8,8 @@ A synthetic population idea-testing engine. Inject a product idea into a simulat
 
 IdeaLab is a technical sandbox for experimenting with several intersecting concepts:
 
-- **Multi-agent simulation** — Emergent social dynamics from 30+ AI personas with distinct personalities, social connections, and belief systems
-- **LLM integration patterns** — Batched API calls, vision API for image analysis, structured output parsing, and deterministic math layered on top of LLM outputs for reproducibility
+- **Multi-agent simulation** — Emergent social dynamics from 30+ AI personas across 10 distinct archetypes, each with unique evaluation weights, social connections, and belief systems
+- **LLM integration patterns** — Batched API calls, vision API for image analysis, structured output parsing, and a deterministic-first scoring pipeline where archetype baselines drive ~70% of outcomes with LLM providing bounded qualitative hints
 - **Full-stack architecture** — FastAPI backend, React/TypeScript frontend, SSE streaming for real-time updates, SQLite event persistence with replay
 - **Canvas-based visualization** — Force-directed social graphs, network animations, real-time data rendering
 - **Simulation design** — Tick-based loops, convergence detection, polarization tracking, and product profile normalization
@@ -18,9 +18,10 @@ IdeaLab is a technical sandbox for experimenting with several intersecting conce
 
 ```
 You describe an idea → Engine builds a product profile (8 dimensions)
-                     → 30+ AI personas react individually (LLM + deterministic adjustment)
-                     → Social interactions update beliefs over rounds
-                     → Convergence tracking detects stabilization or polarization
+                     → Deterministic archetype baselines computed per NPC
+                     → LLM adds bounded qualitative hints (±0.10)
+                     → Archetype-aware social influence with exposure decay
+                     → Convergence tracking classifies outcome (convergence / polarization / unstable)
                      → You get a structured report with scores and recommendations
 ```
 
@@ -29,9 +30,9 @@ You describe an idea → Engine builds a product profile (8 dimensions)
 Each simulation runs a **discrete tick-based loop** with 5 phases per tick:
 
 1. **Awareness** — NPCs become aware of the idea (seed group first, then social spread)
-2. **Reaction** — Newly-aware NPCs generate LLM-driven reactions, then a per-NPC deterministic adjustment anchors the result to the product profile and personality traits (Stage A: individual evaluation)
-3. **Discussion** — Interested NPCs discuss with connected peers (Stage B: social influence)
-4. **Influence** — Deterministic social influence math shifts opinions, modulated by market saturation
+2. **Reaction** — Newly-aware NPCs get a deterministic archetype baseline (from product profile × archetype evaluation weights), an individual trait delta (±0.10), an optional asset delta (±0.08), and a bounded LLM qualitative hint (±0.10). The deterministic components drive ~70% of the final interest score.
+3. **Discussion** — Interested NPCs discuss with connected peers. Discussion weight factors in archetype source credibility (Gatekeepers carry 1.3x weight, Followers 0.6x).
+4. **Influence** — Archetype-aware peer influence with exposure decay (diminishing returns over ticks, except Followers who get increasing social proof). Resistance floors prevent peer enthusiasm from moving NPCs whose baseline says "this product is fundamentally wrong for me."
 5. **Spread** — Interested NPCs probabilistically spread awareness, boosted by novelty, dampened by price friction and trust barriers
 
 ### Product Profile
@@ -49,14 +50,35 @@ Before the simulation starts, the engine normalizes your structured inputs into 
 | Trial Friction | Effort required to try the product | Dampens interest for low-tech NPCs |
 | Market Saturation | How crowded the competitive space is | Dampens peer influence |
 
+### NPC Archetypes
+
+Each NPC belongs to one of **10 archetypes**, each with distinct evaluation weights that determine how they react to different product profiles:
+
+| Archetype | Core driver | Key behavior |
+|-----------|-------------|--------------|
+| Enthusiast | Novelty, differentiation | Gets excited fast, spreads aggressively, may cool off |
+| Pragmatist | Utility, cost/benefit | Needs clear ROI, evaluates alternatives |
+| Skeptic | Trust, risk assessment | Assumes the worst, needs trusted peer endorsement |
+| Follower | Social proof, mainstream | Waits for critical mass, positive market saturation weight |
+| Gatekeeper | Technical merit, expertise | High credibility source, conditional endorsement |
+| Budget-Conscious | Price sensitivity | Rejects expensive products, tries anything free |
+| Health-Conscious Evaluator | Safety, evidence | Demands clinical evidence, high trust barrier weight |
+| Brand-Sensitive Buyer | Aesthetics, identity | Premium pricing is a quality signal (positive price weight) |
+| Values-Driven Buyer | Mission, ethics | Highest identity_fit weight, low susceptibility to hype |
+| Loyal Incumbent User | Inertia, switching cost | Highest trial friction penalty, hardest to move |
+
+Population presets (balanced, young_consumer, health_conscious, skeptical, premium) control the mix of archetypes in each simulation.
+
 ### Convergence Tracking
 
 The engine monitors population dynamics each round:
 
 - **Stabilization** — Is mean interest still changing or settling?
+- **Variance stability** — Is the spread of opinions stabilizing?
 - **Polarization** — Is the population splitting into opposing camps?
+- **Archetype coherence** — Do NPCs within the same archetype agree? (Low within-group std dev confirms deterministic baselines dominate over LLM noise)
+- **Result classification** — `stable_convergence`, `stable_polarization`, `unstable`, or `noisy`
 - **Objection convergence** — Are concerns concentrating around a few themes or fragmenting?
-- **Overall convergence** — Has the simulation reached a steady state?
 
 ## Tech Stack
 
@@ -249,9 +271,24 @@ After the simulation completes, the **Report** page shows:
 - **Recommendations** — AI-generated suggestions to improve the idea
 - **Narrative summary** — A written analysis of the simulation results
 
-### Step 5 — Iterate
+### Step 5 — Create variants
 
-Adjust your idea description, pricing, or target audience and run again. Compare results across simulations on the **Dashboard**.
+From any completed simulation report, click **Create Variant** to re-run with adjusted parameters:
+
+1. The Inject form pre-fills with all original values (idea, config, market positioning)
+2. Change whichever fields you want to test (pricing, audience, description, simulation rounds, etc.)
+3. Optionally add a label (e.g. "Lower price test") to describe what you're testing
+4. Launch the variant — the system automatically tracks which fields changed
+
+After the variant completes, the Report page shows:
+- **Lineage badge** — "Variant of: {original}" with a link back
+- **Compare with Original** — Opens a side-by-side comparison showing:
+  - What fields changed (old → new values)
+  - Metrics delta (interest, awareness, adoption with directional arrows)
+  - Objections and segments comparison
+  - Auto-generated verdict summarizing the impact
+
+The Dashboard marks variant simulations with a badge, and the original simulation's report lists all its variants.
 
 ### Replay past simulations
 
@@ -269,6 +306,8 @@ All simulation events are persisted to the database. Restarting the server does 
 | `GET` | `/api/simulations/{id}/report` | Get the structured report |
 | `GET` | `/api/simulations/{id}/events` | Get persisted event log |
 | `POST` | `/api/simulations/{id}/ask-npc` | Ask an NPC a question (grounded in sim state) |
+| `GET` | `/api/simulations/{id}/variants` | List variant simulations |
+| `GET` | `/api/simulations/{id}/compare/{variant_id}` | Compare parent vs variant |
 | `GET` | `/api/npcs` | List available NPC templates |
 | `GET` | `/api/health` | Health check |
 
@@ -305,29 +344,34 @@ idealab/
 │   ├── api/
 │   │   ├── routes/              # FastAPI route handlers
 │   │   └── schemas/             # Pydantic request/response models
+│   ├── alembic/                 # Database migrations
 │   ├── db/                      # SQLAlchemy models & database setup
 │   ├── llm/                     # Claude API client & prompt templates
 │   ├── simulation/
 │   │   ├── engine.py            # Tick loop orchestration
-│   │   ├── npc.py               # NPC state management
+│   │   ├── evaluation.py        # Deterministic archetype baseline & individual delta computation
+│   │   ├── npc.py               # NPC state management (with exposure tracking)
+│   │   ├── population.py        # Archetype-based NPC generation & social graph
 │   │   ├── world.py             # World state & population loading
 │   │   ├── product_profile.py   # Idea normalization → 8 dimensions
-│   │   ├── propagation.py       # Deterministic influence & spread math
-│   │   ├── convergence.py       # Stability, polarization, objection tracking
-│   │   ├── asset_signals.py      # Reference asset analysis & per-NPC adjustment
+│   │   ├── propagation.py       # Archetype-aware influence, resistance floors, exposure decay
+│   │   ├── convergence.py       # Stability, polarization, archetype coherence, result classification
+│   │   ├── asset_signals.py     # Reference asset analysis & per-NPC adjustment
 │   │   ├── reporter.py          # Report generation
 │   │   └── streamer.py          # In-memory event store for live SSE
 │   ├── config.py                # App settings (from .env)
 │   └── main.py                  # FastAPI app entry point
 ├── frontend/
 │   └── src/
-│       ├── pages/               # Dashboard, Inject, LiveSimulation, Report
+│       ├── pages/               # Dashboard, Inject, LiveSimulation, Report, Compare
 │       ├── components/          # Charts, metrics, NPC cards
 │       ├── hooks/               # SSE streaming hook
 │       └── types.ts             # TypeScript interfaces
 ├── data/
-│   ├── npc_templates/           # Pre-built NPC population (30+ personas)
+│   ├── npc_templates/           # Archetype definitions (10 archetypes, evaluation weights, presets)
 │   └── scenarios/               # Example idea injections
+├── tests/
+│   └── validation/              # Deterministic validation harness (10 layers, no LLM needed)
 ├── docs/
 │   ├── PRD.md                   # Product requirements
 │   └── TECHNICAL_DESIGN.md      # Architecture & API design
@@ -343,12 +387,16 @@ idealab/
 InjectedIdea (user input) + Reference Assets (optional images)
   → analyze_assets() → AssetSignals (7 dimensions from LLM vision)
   → build_product_profile(idea, asset_signals) → ProductProfile (8 dimensions, nudged by assets)
+  → Per NPC:
+      archetype_baseline      (0.15–0.85)  deterministic: ProductProfile × archetype weights
+    + individual_delta        (±0.10)      deterministic: trait deviation × ProductProfile
+    + asset_delta             (±0.08)      deterministic: AssetSignals × personality
+    + llm_hint                (±0.10)      LLM qualitative reasoning + bounded adjustment
+    = final interest_score    (0–1)        clamped
   → Per tick:
-      Stage A (individual): LLM reaction + compute_npc_adjustment(profile × personality)
-                            + compute_asset_adjustment(asset_signals × personality)
-      Stage B (social):     Discussion (LLM) → Peer influence (math) → Spread (math)
-                            All modulated by product profile dimensions
-  → ConvergenceTracker records per-tick snapshots
+      Discussions (LLM) → Archetype-aware peer influence (math, with exposure decay)
+                        → Spread (math, modulated by product profile)
+  → ConvergenceTracker records per-tick snapshots, archetype coherence, result classification
   → generate_report() includes profile, asset signals, convergence, metrics, and LLM analysis
 ```
 
@@ -371,6 +419,29 @@ Each simulation targets **under $0.15** in API costs through:
 - Haiku for NPC reactions (fast and cheap), Sonnet for the final report (higher quality)
 - Deterministic math for influence and spread phases (no LLM needed)
 - Capped discussions (max 5 per tick)
+
+## Validation
+
+A 10-layer deterministic validation harness (`tests/validation/validate_simulation.py`) verifies the simulation foundation without LLM calls:
+
+```bash
+cd idealab
+python -m tests.validation.validate_simulation           # all layers
+python -m tests.validation.validate_simulation --layer 6  # specific layer
+```
+
+| Layer | What it validates |
+|-------|-------------------|
+| 1 | Archetype baselines differ meaningfully (spread >= 0.15) |
+| 2 | Price sensitivity: Budget-Conscious drops 2.8x harder than Enthusiast |
+| 3 | Individual deltas stay within ±0.10 bounds |
+| 4 | Face validity: expected archetypes rank top/bottom for each product |
+| 5 | Convergence tracker detects stability, computes archetype coherence |
+| 6 | Input wording robustness: 3 description styles produce identical baselines |
+| 7 | Archetype behavioral separation across 5 dimensions (interest, try, pay, recommend, objection) |
+| 8 | Exposure decay: Follower capped at 1.5x, Skeptic moves < 0.15 over 20 ticks |
+| 9 | Seed sensitivity: population randomness classified LOW for all test products |
+| 10 | Holdout scenarios: 4 unseen products pass face-validity without weight tuning |
 
 ## Disclaimer
 

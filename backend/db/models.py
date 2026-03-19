@@ -33,6 +33,13 @@ class SimulationRecord(Base):
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # Variant lineage
+    parent_simulation_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    variant_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    changed_fields: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
 
 class Asset(Base):
     __tablename__ = "assets"
