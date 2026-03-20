@@ -69,6 +69,11 @@ class NpcState:
     history: list[dict] = field(default_factory=list)  # [{tick, stance, interest}]
     influence_sources: list[str] = field(default_factory=list)
 
+    # Adoption (computed deterministically from interest, profile, personality)
+    adopted: bool = False
+    adoption_score: float = 0.0
+    adoption_blockers: list[str] = field(default_factory=list)
+
     # Stage 3: Exposure tracking for archetype-aware influence
     exposure_count: int = 0  # ticks since becoming aware (incremented each tick)
     discussion_partners: set = field(default_factory=set)  # NPC IDs discussed with
@@ -165,6 +170,9 @@ class NpcState:
             "objections": self.objections,
             "would_pay": self.would_pay,
             "would_recommend": self.would_recommend,
+            "adopted": self.adopted,
+            "adoption_score": round(self.adoption_score, 3),
+            "adoption_blockers": self.adoption_blockers,
             "emotional_reaction": self.emotional_reaction,
             "history": self.history,
             "influence_sources": self.influence_sources,
@@ -227,6 +235,7 @@ class Npc:
                 "tech_savviness": self.personality.tech_savviness,
                 "price_sensitivity": self.personality.price_sensitivity,
                 "social_influence": self.personality.social_influence,
+                "conformity": self.personality.conformity,
                 "novelty_seeking": self.personality.novelty_seeking,
             },
             "interests": self.interests,

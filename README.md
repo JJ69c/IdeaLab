@@ -8,7 +8,7 @@ A synthetic population idea-testing engine. Inject a product idea into a simulat
 
 IdeaLab is a technical sandbox for experimenting with several intersecting concepts:
 
-- **Multi-agent simulation** — Emergent social dynamics from 30+ AI personas across 10 distinct archetypes, each with unique evaluation weights, social connections, and belief systems
+- **Multi-agent simulation** — Emergent social dynamics from 30+ AI personas across 8 behaviorally distinct archetypes, each with unique evaluation weights, social connections, and belief systems
 - **LLM integration patterns** — Batched API calls, vision API for image analysis, structured output parsing, and a deterministic-first scoring pipeline where archetype baselines drive ~70% of outcomes with LLM providing bounded qualitative hints
 - **Full-stack architecture** — FastAPI backend, React/TypeScript frontend, SSE streaming for real-time updates, SQLite event persistence with replay
 - **Canvas-based visualization** — Force-directed social graphs, network animations, real-time data rendering
@@ -30,9 +30,9 @@ You describe an idea → Engine builds a product profile (8 dimensions)
 Each simulation runs a **discrete tick-based loop** with 5 phases per tick:
 
 1. **Awareness** — NPCs become aware of the idea (seed group first, then social spread)
-2. **Reaction** — Newly-aware NPCs get a deterministic archetype baseline (from product profile × archetype evaluation weights), an individual trait delta (±0.10), an optional asset delta (±0.08), and a bounded LLM qualitative hint (±0.10). The deterministic components drive ~70% of the final interest score.
-3. **Discussion** — Interested NPCs discuss with connected peers. Discussion weight factors in archetype source credibility (Gatekeepers carry 1.3x weight, Followers 0.6x).
-4. **Influence** — Archetype-aware peer influence with exposure decay (diminishing returns over ticks, except Followers who get increasing social proof). Resistance floors prevent peer enthusiasm from moving NPCs whose baseline says "this product is fundamentally wrong for me."
+2. **Reaction** — Newly-aware NPCs get a deterministic archetype baseline (from product profile × archetype evaluation weights), an individual trait delta (±0.10), an optional asset delta (±0.08), a competition delta (±0.08), and a bounded LLM qualitative hint (±0.10). The deterministic components drive ~70% of the final interest score.
+3. **Discussion** — Interested NPCs discuss with connected peers. Discussion weight factors in archetype source credibility (Analytical Skeptics carry 1.3x weight, Social Followers 0.55x).
+4. **Influence** — Archetype-aware peer influence with exposure decay (diminishing returns over ticks, except Social Followers who get increasing social proof). Resistance floors prevent peer enthusiasm from moving NPCs whose baseline says "this product is fundamentally wrong for me."
 5. **Spread** — Interested NPCs probabilistically spread awareness, boosted by novelty, dampened by price friction and trust barriers
 
 ### Product Profile
@@ -48,24 +48,45 @@ Before the simulation starts, the engine normalizes your structured inputs into 
 | Trust Barrier | How much trust is needed before adoption | Dampens interest for skeptical NPCs, raises conviction threshold for spread |
 | Identity Fit | Baseline audience-product alignment | Per-NPC adjustment factor |
 | Trial Friction | Effort required to try the product | Dampens interest for low-tech NPCs |
-| Market Saturation | How crowded the competitive space is | Dampens peer influence |
+| Market Saturation | How crowded the competitive space is (confidence-weighted) | Dampens peer influence |
+
+### Competition Context
+
+When alternatives are provided, the engine classifies each one before using it in the simulation. This prevents fake names from inflating market saturation and stops the LLM from hallucinating comparisons against non-existent products.
+
+**Classification types (ordered by trust level):**
+- **Verified named competitor** (confidence 0.8-1.0) — matched in `known_products.json`, safe to reference by name in prompts
+- **Inferred named competitor** (confidence 0.4) — heuristic capitalized-name match, contributes weakly to dimensions, never named to the LLM
+- **Behavioral alternative** (confidence 0.4-0.9) — non-product approaches like "pen and paper", "spreadsheets"
+- **Generic category** (confidence 0.5) — vague references like "existing tools"
+- **Unknown** (confidence 0.2) — unrecognized text, contributes minimally
+
+The classified alternatives produce 5 competition dimensions:
+
+| Dimension | What it captures | How it affects simulation |
+|-----------|-----------------|--------------------------|
+| Direct Competition Intensity | Strength of competitive threat (confidence × category fit × tier weight, diminishing returns) | Reduces novelty, raises the bar |
+| Incumbent Trust Pressure | Trust moat of verified major incumbents only | Raises trust barrier for skeptical NPCs |
+| Switching Cost Pressure | Entrenched behavioral habits + incumbent tool lock-in | Penalizes low-openness NPCs via trait-based check |
+| Familiarity of Solutions | Breadth and recognition of solution space (all alt types) | Boosts Follower (social proof) |
+| Saturation Pressure | Confidence-weighted market crowdedness | Replaces old comma-count formula for market saturation |
+
+Only **verified** named competitors reach LLM prompts by name. Inferred competitors are noted as a count ("there are also N other competitor(s) mentioned but not verified") without naming them. Behavioral alternatives are presented separately as "alternative approaches people currently use." An explicit instruction prevents the LLM from inventing or guessing competitor names.
 
 ### NPC Archetypes
 
-Each NPC belongs to one of **10 archetypes**, each with distinct evaluation weights that determine how they react to different product profiles:
+Each NPC belongs to one of **8 behaviorally distinct archetypes**, each with unique evaluation weights, propagation parameters, and adoption thresholds:
 
 | Archetype | Core driver | Key behavior |
 |-----------|-------------|--------------|
-| Enthusiast | Novelty, differentiation | Gets excited fast, spreads aggressively, may cool off |
-| Pragmatist | Utility, cost/benefit | Needs clear ROI, evaluates alternatives |
-| Skeptic | Trust, risk assessment | Assumes the worst, needs trusted peer endorsement |
-| Follower | Social proof, mainstream | Waits for critical mass, positive market saturation weight |
-| Gatekeeper | Technical merit, expertise | High credibility source, conditional endorsement |
-| Budget-Conscious | Price sensitivity | Rejects expensive products, tries anything free |
-| Health-Conscious Evaluator | Safety, evidence | Demands clinical evidence, high trust barrier weight |
-| Brand-Sensitive Buyer | Aesthetics, identity | Premium pricing is a quality signal (positive price weight) |
-| Values-Driven Buyer | Mission, ethics | Highest identity_fit weight, low susceptibility to hype |
-| Loyal Incumbent User | Inertia, switching cost | Highest trial friction penalty, hardest to move |
+| Analytical Skeptic | Evidence, risk assessment | Assumes claims are exaggerated, highest source credibility (1.3x), resistance floor 0.40 |
+| Trend-Driven Early Adopter | Novelty, being first | Novelty weight 0.30, lowest adoption threshold (0.55), market saturation penalty -0.15 |
+| Price-Sensitive Pragmatist | Cost/benefit obsession | Price friction weight -0.35 (strongest gate), highest price_sensitivity trait |
+| Health-Conscious Evaluator | Safety, clinical evidence | Trust barrier weight -0.30, resistance floor 0.40, demands credentials |
+| Aesthetic / Brand-Sensitive Buyer | Identity, polish | Positive price friction (+0.05 = premium signals quality), market saturation penalty -0.20 |
+| Social-Proof Follower | Peer behavior | Positive market saturation (+0.20), susceptibility 1.30 (highest), increasing social proof returns |
+| Convenience-First Busy User | Time, friction | Trial friction weight -0.30 (strongest gate), rejects anything with setup friction |
+| Values-Driven Buyer | Mission, ethics | Identity fit weight 0.35 (highest), susceptibility 0.30 (lowest), suspicious of greenwashing |
 
 Population presets (balanced, young_consumer, health_conscious, skeptical, premium) control the mix of archetypes in each simulation.
 
@@ -173,18 +194,34 @@ On the **Set Up Simulation** page, fill in four sections:
 | Existing Alternatives | No | "Forest, Freedom, Cold Turkey" |
 | Key Differentiator | No | "AI-powered adaptive blocking that learns your patterns" |
 
-**Section 3: Reference Assets** (collapsible)
+**Section 3: Reference Assets**
 
-Upload product screenshots, UI mockups, packaging photos, or landing page screenshots. Up to 5 assets, max 5MB each (JPEG, PNG, WebP, GIF).
+Upload product screenshots, UI mockups, packaging photos, or provide website URLs. Up to 5 assets, max 5MB each (JPEG, PNG, WebP, GIF). URL-only assets (no image upload) are also supported — the LLM rates based on what the URL and context imply.
 
 | Field | Required | Example |
 |-------|----------|---------|
-| Image | Yes (per asset) | Screenshot of your landing page |
+| Image | No (drag-drop or browse) | Screenshot of your landing page |
 | Asset Type | Yes | website, app_ui, product_photo, packaging, prototype, marketing_visual |
 | URL | No | "https://myproduct.com" |
 | Note | No | "Final product look" or "Early prototype" |
 
-Assets are analyzed via a single LLM vision call to extract structured signals (polish, trustworthiness, clarity, visual appeal, premium feel, usability, differentiation). These signals modify the product profile and add per-NPC adjustments — NPCs never see raw images directly.
+Assets are analyzed via a single LLM vision call (or text-only for URL-only assets) to extract 7 structured perception signals:
+
+| Signal | What it measures |
+|--------|-----------------|
+| Perceived Polish | Professional craftsmanship rating |
+| Trustworthiness | Legitimacy and safety impression |
+| Clarity | Value proposition immediately clear? |
+| Visual Appeal | Aesthetic quality |
+| Premium Feel | Premium vs. budget impression |
+| Usability Impression | Ease/intuitiveness from visuals |
+| Differentiation Signal | Visual distinctiveness from typical products |
+
+These signals affect the simulation at two levels:
+- **Product-level** — Trust barrier reduced by trustworthiness (×0.20), utility clarity boosted by clarity (×0.15), differentiation boosted by differentiation signal (×0.10), trial friction reduced by polish (×0.15)
+- **Per-NPC** — Personality-weighted adjustment (±0.10): tech-savvy people are more critical of polish, price-sensitive people discount premium feel, open people amplify visual appeal, skeptics discount usability impressions from screenshots
+
+NPCs never see raw images directly — all visual impressions are first distilled into these structured signals.
 
 **Section 4: Strengths & Risks** (collapsible)
 
@@ -261,7 +298,7 @@ When an NPC is selected, the inspector panel includes a **mini chat interface** 
 
 After the simulation completes, the **Report** page shows:
 
-- **Overall adoption score** (0-1) and adoption likelihood rating
+- **Adoption breakdown** — per-NPC adoption rate with top barrier explanations
 - **Product profile** — The 8 derived dimensions and how they shaped the simulation
 - **Key metrics** — awareness rate, interest rate, rejection rate, viral coefficient, net sentiment
 - **Convergence analysis** — Whether the outcome stabilized, polarized, or remained volatile
@@ -273,22 +310,32 @@ After the simulation completes, the **Report** page shows:
 
 ### Step 5 — Create variants
 
-From any completed simulation report, click **Create Variant** to re-run with adjusted parameters:
+From any completed simulation report, you can create variants in two ways:
 
-1. The Inject form pre-fills with all original values (idea, config, market positioning)
-2. Change whichever fields you want to test (pricing, audience, description, simulation rounds, etc.)
-3. Optionally add a label (e.g. "Lower price test") to describe what you're testing
-4. Launch the variant — the system automatically tracks which fields changed
+**Quick Variant** (recommended for what-if testing):
+- Click **Quick Variant** on the Report page
+- A drawer slides in showing only the 6 key parameters that matter for hypothesis testing: pricing, target audience, differentiator, alternatives, simulation rounds, and population size
+- Everything else stays the same as the original
+- Label the variant and launch — the system tracks which fields changed and maintains full lineage (parent → root chain)
 
-After the variant completes, the Report page shows:
-- **Lineage badge** — "Variant of: {original}" with a link back
-- **Compare with Original** — Opens a side-by-side comparison showing:
-  - What fields changed (old → new values)
-  - Metrics delta (interest, awareness, adoption with directional arrows)
-  - Objections and segments comparison
-  - Auto-generated verdict summarizing the impact
+**Full Variant**:
+- Click **Full Variant** to open the complete Inject form pre-filled with all original values
+- Modify any field (idea name, description, assets, strengths/risks, etc.)
+- Useful when testing a fundamentally different positioning
 
-The Dashboard marks variant simulations with a badge, and the original simulation's report lists all its variants.
+After the variant completes, the **Compare** page shows:
+
+- **What Changed** — Detailed before/after for each changed field with labels
+- **Metrics Comparison** — All metrics with directional delta arrows (awareness, interest, rejection, adoption, etc.)
+- **Adoption Breakdown** — Side-by-side adoption rates, adopted counts, and top adoption blockers with bar charts
+- **Archetype Impact** — Per-archetype interest and adoption delta, sorted by impact magnitude, showing which persona types shifted most
+- **Convergence** — Side-by-side result classification (stable convergence, polarization, unstable, noisy), polarization score, stability streak
+- **Objections Comparison** — Top objections side-by-side with severity badges
+- **Segments Comparison** — LLM-identified user segments side-by-side
+- **AI Explanation** — On-demand LLM analysis explaining WHY the variant produced different results (verdict, key causal drivers, segment-level shifts, actionable recommendation)
+- **Verdict** — Auto-generated summary of overall metric impact
+
+**Lineage tracking**: Variants maintain `parent_simulation_id` and `root_simulation_id` for full family tree tracking. The Dashboard marks variant simulations with a badge, and the original simulation's report lists all its variants.
 
 ### Replay past simulations
 
@@ -307,7 +354,8 @@ All simulation events are persisted to the database. Restarting the server does 
 | `GET` | `/api/simulations/{id}/events` | Get persisted event log |
 | `POST` | `/api/simulations/{id}/ask-npc` | Ask an NPC a question (grounded in sim state) |
 | `GET` | `/api/simulations/{id}/variants` | List variant simulations |
-| `GET` | `/api/simulations/{id}/compare/{variant_id}` | Compare parent vs variant |
+| `GET` | `/api/simulations/{id}/compare/{variant_id}` | Compare parent vs variant (enhanced with archetype, adoption, convergence data) |
+| `POST` | `/api/simulations/{id}/compare/{variant_id}/explain` | Generate AI explanation of variant differences |
 | `GET` | `/api/npcs` | List available NPC templates |
 | `GET` | `/api/health` | Health check |
 
@@ -357,6 +405,7 @@ idealab/
 │   │   ├── propagation.py       # Archetype-aware influence, resistance floors, exposure decay
 │   │   ├── convergence.py       # Stability, polarization, archetype coherence, result classification
 │   │   ├── asset_signals.py     # Reference asset analysis & per-NPC adjustment
+│   │   ├── competition.py       # Alternative classification & competition context
 │   │   ├── reporter.py          # Report generation
 │   │   └── streamer.py          # In-memory event store for live SSE
 │   ├── config.py                # App settings (from .env)
@@ -364,14 +413,15 @@ idealab/
 ├── frontend/
 │   └── src/
 │       ├── pages/               # Dashboard, Inject, LiveSimulation, Report, Compare
-│       ├── components/          # Charts, metrics, NPC cards
+│       ├── components/          # Charts, metrics, NPC cards, QuickVariantDrawer
 │       ├── hooks/               # SSE streaming hook
 │       └── types.ts             # TypeScript interfaces
 ├── data/
-│   ├── npc_templates/           # Archetype definitions (10 archetypes, evaluation weights, presets)
+│   ├── npc_templates/           # Archetype definitions (8 archetypes, evaluation weights, presets)
+│   ├── known_products.json      # ~130 known products for competition classification
 │   └── scenarios/               # Example idea injections
 ├── tests/
-│   └── validation/              # Deterministic validation harness (10 layers, no LLM needed)
+│   └── validation/              # Deterministic validation harness (13 layers, no LLM needed)
 ├── docs/
 │   ├── PRD.md                   # Product requirements
 │   └── TECHNICAL_DESIGN.md      # Architecture & API design
@@ -386,18 +436,32 @@ idealab/
 ```
 InjectedIdea (user input) + Reference Assets (optional images)
   → analyze_assets() → AssetSignals (7 dimensions from LLM vision)
-  → build_product_profile(idea, asset_signals) → ProductProfile (8 dimensions, nudged by assets)
+  → classify_alternatives() → CompetitionContext (5 dimensions, confidence-weighted)
+  → build_product_profile(idea, asset_signals, competition_context) → ProductProfile (8 dimensions)
   → Per NPC:
       archetype_baseline      (0.15–0.85)  deterministic: ProductProfile × archetype weights
     + individual_delta        (±0.10)      deterministic: trait deviation × ProductProfile
     + asset_delta             (±0.08)      deterministic: AssetSignals × personality
+    + competition_delta       (±0.08)      deterministic: CompetitionContext × personality/archetype
     + llm_hint                (±0.10)      LLM qualitative reasoning + bounded adjustment
     = final interest_score    (0–1)        clamped
   → Per tick:
       Discussions (LLM) → Archetype-aware peer influence (math, with exposure decay)
                         → Spread (math, modulated by product profile)
+                        → Adoption (deterministic, per-NPC):
+                            adoption_score = interest × (1 - effective_barrier)
+                            effective_barrier = weighted sum of:
+                              trust_gap     (0.20) × skepticism adjustment
+                              clarity_gap   (0.15) = 1 - utility_clarity
+                              price_gap     (0.20) × price_sensitivity (paid only)
+                              trial_gap     (0.15) × (1 - tech_savviness)
+                              switching_gap (0.15) × conformity (if competition)
+                              inertia_gap   (0.15) × (1 - openness) (if competition)
+                            Hard gates: not aware → 0, interest < 0.30 → 0,
+                                        paid product + won't pay → 0
+                            Threshold: adopted = score >= 0.50
   → ConvergenceTracker records per-tick snapshots, archetype coherence, result classification
-  → generate_report() includes profile, asset signals, convergence, metrics, and LLM analysis
+  → generate_report() includes profile, asset signals, competition context, adoption breakdown, convergence, and LLM analysis
 ```
 
 ### Event Persistence
@@ -422,12 +486,12 @@ Each simulation targets **under $0.15** in API costs through:
 
 ## Validation
 
-A 10-layer deterministic validation harness (`tests/validation/validate_simulation.py`) verifies the simulation foundation without LLM calls:
+A 13-layer deterministic validation harness (`tests/validation/validate_simulation.py`) verifies the simulation foundation without LLM calls:
 
 ```bash
 cd idealab
-python -m tests.validation.validate_simulation           # all layers
-python -m tests.validation.validate_simulation --layer 6  # specific layer
+python -m tests.validation.validate_simulation            # all layers
+python -m tests.validation.validate_simulation --layer 13  # specific layer
 ```
 
 | Layer | What it validates |
@@ -442,6 +506,9 @@ python -m tests.validation.validate_simulation --layer 6  # specific layer
 | 8 | Exposure decay: Follower capped at 1.5x, Skeptic moves < 0.15 over 20 ticks |
 | 9 | Seed sensitivity: population randomness classified LOW for all test products |
 | 10 | Holdout scenarios: 4 unseen products pass face-validity without weight tuning |
+| 11 | Competition context: classification accuracy, confidence weighting, backward compat, adjustment bounds |
+| 12 | Asset signals: product profile shifts, per-NPC adjustments bounded ±0.10, personality sensitivity, backward compat |
+| 13 | Adoption model: per-NPC barriers, hard gates (unaware, low interest, won't pay), personality sensitivity, bounds |
 
 ## Disclaimer
 

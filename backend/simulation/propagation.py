@@ -28,19 +28,17 @@ from backend.simulation.world import SpreadEvent, WorldState
 # ---------------------------------------------------------------------------
 
 # How credible each archetype is as a discussion SOURCE.
-# Gatekeepers/Skeptics carry weight when they endorse.
-# Followers amplify but don't originate conviction.
+# Analytical Skeptics carry outsized weight when they endorse.
+# Social Followers amplify but don't originate conviction.
 _SOURCE_CREDIBILITY: dict[str, float] = {
-    "gatekeeper": 1.3,
-    "skeptic": 1.2,
-    "health_evaluator": 1.1,
-    "values_buyer": 1.0,
-    "pragmatist": 1.0,
-    "enthusiast": 0.9,
-    "brand_buyer": 0.9,
-    "budget_conscious": 0.8,
-    "loyal_incumbent": 0.7,
-    "follower": 0.6,
+    "analytical_skeptic": 1.3,
+    "health_evaluator": 1.15,
+    "values_buyer": 1.05,
+    "convenience_user": 0.90,
+    "trend_adopter": 0.85,
+    "brand_buyer": 0.85,
+    "price_pragmatist": 0.80,
+    "social_follower": 0.55,
 }
 
 
@@ -61,8 +59,8 @@ def compute_peer_susceptibility(npc: Npc, world: WorldState) -> float:
 
     # Exposure decay: diminishing returns over time
     exposure = npc.state.exposure_count
-    if archetype_id == "follower":
-        # Followers get INCREASING returns (social proof accumulates)
+    if archetype_id == "social_follower":
+        # Social Followers get INCREASING returns (social proof accumulates)
         decay = min(1.5, 1.0 + 0.08 * exposure)
     else:
         # Everyone else: diminishing returns

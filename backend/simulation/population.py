@@ -110,16 +110,14 @@ def generate_npc(
 
     # Communication style derived from archetype
     styles = {
-        "enthusiast": ["enthusiastic", "visionary", "energetic and persuasive"],
-        "pragmatist": ["measured", "data-driven", "ROI-focused"],
-        "skeptic": ["questioning", "cautious", "detail-oriented"],
-        "follower": ["agreeable", "consensus-seeking", "observational"],
-        "gatekeeper": ["authoritative", "technical", "evaluative"],
-        "budget_conscious": ["cost-aware", "value-focused", "practical"],
+        "analytical_skeptic": ["questioning", "evidence-demanding", "detail-oriented", "cautious"],
+        "trend_adopter": ["enthusiastic", "trend-aware", "energetic", "visionary"],
+        "price_pragmatist": ["cost-aware", "value-focused", "data-driven", "practical"],
         "health_evaluator": ["evidence-seeking", "health-conscious", "cautiously analytical"],
-        "brand_buyer": ["trend-aware", "aesthetics-driven", "brand-conscious"],
-        "values_buyer": ["mission-oriented", "ethics-focused", "principled"],
-        "loyal_incumbent": ["change-resistant", "reliability-focused", "habit-driven"],
+        "brand_buyer": ["trend-aware", "aesthetics-driven", "brand-conscious", "aspirational"],
+        "social_follower": ["agreeable", "consensus-seeking", "observational", "peer-referencing"],
+        "convenience_user": ["time-conscious", "direct", "efficiency-focused", "impatient"],
+        "values_buyer": ["mission-oriented", "ethics-focused", "principled", "advocacy-driven"],
     }
     style = rng.choice(styles.get(archetype.id, ["neutral"]))
 
