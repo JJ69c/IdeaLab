@@ -41,6 +41,7 @@ async def create_simulation(
     """
     # Variant lineage: validate parent and compute changed fields
     changed_fields = None
+    root_simulation_id = None
     if request.parent_simulation_id:
         parent_result = await db.execute(
             select(SimulationRecord).where(
@@ -56,6 +57,7 @@ async def create_simulation(
                 detail="Can only create variants from completed simulations",
             )
         changed_fields = _compute_changed_fields(request, parent)
+        root_simulation_id = parent.root_simulation_id or parent.id
 
     idea_metadata = {
         "stage": request.idea.stage,
@@ -76,6 +78,7 @@ async def create_simulation(
         config=request.config.model_dump(),
         status="running",
         parent_simulation_id=request.parent_simulation_id,
+        root_simulation_id=root_simulation_id,
         variant_name=request.variant_name,
         changed_fields=changed_fields,
     )
@@ -103,21 +106,29 @@ async def create_simulation(
         seed_count=request.config.seed_count,
     )
 
-    # Resolve asset references to file paths for the background thread
+    # Resolve asset references to file paths for the background thread.
+    # Assets may be image uploads (with asset_id) or URL-only references.
     asset_file_paths: list[str] = []
     asset_metadata: list[dict] = []
     if request.asset_refs:
         sync_db = SyncSession()
         try:
             for ref in request.asset_refs:
-                asset = sync_db.get(Asset, ref.asset_id)
-                if asset and asset.file_path:
-                    asset_file_paths.append(asset.file_path)
-                    asset_metadata.append({
-                        "asset_type": ref.asset_type,
-                        "url": ref.url,
-                        "note": ref.note,
-                    })
+                meta = {
+                    "asset_type": ref.asset_type,
+                    "url": ref.url,
+                    "note": ref.note,
+                }
+                if ref.asset_id:
+                    # Uploaded image — resolve to file path
+                    asset = sync_db.get(Asset, ref.asset_id)
+                    if asset and asset.file_path:
+                        asset_file_paths.append(asset.file_path)
+                        asset_metadata.append(meta)
+                elif ref.url:
+                    # URL-only asset — no file path, but still analyzed
+                    asset_file_paths.append("")  # placeholder, skipped by load_image
+                    asset_metadata.append(meta)
         finally:
             sync_db.close()
 
@@ -142,6 +153,7 @@ async def create_simulation(
         status="running",
         created_at=record.created_at,
         parent_simulation_id=record.parent_simulation_id,
+        root_simulation_id=record.root_simulation_id,
         variant_name=record.variant_name,
         changed_fields=record.changed_fields,
     )
@@ -372,7 +384,9 @@ async def list_simulations(db: AsyncSession = Depends(get_db)):
         SimulationSummary(
             id=r.id, idea_title=r.idea_title, status=r.status,
             created_at=r.created_at, completed_at=r.completed_at, metrics=r.metrics,
-            parent_simulation_id=r.parent_simulation_id, variant_name=r.variant_name,
+            parent_simulation_id=r.parent_simulation_id,
+            root_simulation_id=r.root_simulation_id,
+            variant_name=r.variant_name,
         )
         for r in records
     ]
@@ -394,6 +408,7 @@ async def get_simulation(simulation_id: str, db: AsyncSession = Depends(get_db))
         created_at=record.created_at, completed_at=record.completed_at,
         report=record.report, summary=record.summary, metrics=record.metrics,
         parent_simulation_id=record.parent_simulation_id,
+        root_simulation_id=record.root_simulation_id,
         variant_name=record.variant_name, changed_fields=record.changed_fields,
     )
 
@@ -450,10 +465,141 @@ async def list_variants(simulation_id: str, db: AsyncSession = Depends(get_db)):
         SimulationSummary(
             id=r.id, idea_title=r.idea_title, status=r.status,
             created_at=r.created_at, completed_at=r.completed_at, metrics=r.metrics,
-            parent_simulation_id=r.parent_simulation_id, variant_name=r.variant_name,
+            parent_simulation_id=r.parent_simulation_id,
+            root_simulation_id=r.root_simulation_id,
+            variant_name=r.variant_name,
         )
         for r in records
     ]
+
+
+_FIELD_LABELS = {
+    "title": "Idea Name", "description": "Description", "category": "Category",
+    "stage": "Stage", "target_audience": "Target Audience",
+    "problem_statement": "Problem Statement", "price_point": "Pricing",
+    "existing_alternatives": "Alternatives", "differentiator": "Differentiator",
+    "known_strengths": "Strengths", "known_risks": "Risks",
+    "num_ticks": "Rounds", "population_size": "Population",
+    "seed_count": "Initial Exposure",
+}
+
+
+def _build_changed_fields_detail(
+    changed_fields: list[str],
+    parent: SimulationRecord,
+    variant: SimulationRecord,
+) -> list[dict]:
+    """Build detailed before/after for each changed field."""
+    details = []
+    parent_meta = parent.idea_metadata or {}
+    parent_config = parent.config or {}
+    variant_meta = variant.idea_metadata or {}
+    variant_config = variant.config or {}
+
+    for field in changed_fields:
+        if field == "title":
+            old_val, new_val = parent.idea_title, variant.idea_title
+        elif field == "description":
+            old_val, new_val = parent.idea_description, variant.idea_description
+        elif field == "category":
+            old_val, new_val = parent.idea_category, variant.idea_category
+        elif field in ("num_ticks", "population_size", "seed_count"):
+            old_val = str(parent_config.get(field, ""))
+            new_val = str(variant_config.get(field, ""))
+        else:
+            old_val = str(parent_meta.get(field, ""))
+            new_val = str(variant_meta.get(field, ""))
+
+        details.append({
+            "field": field,
+            "label": _FIELD_LABELS.get(field, field),
+            "old_value": old_val,
+            "new_value": new_val,
+        })
+    return details
+
+
+def _enrich_npc_archetypes(
+    npc_results: list[dict], archetype_map: dict[str, str],
+) -> None:
+    """Fill in missing archetype fields on NPC results from archetype map."""
+    if not archetype_map:
+        return
+    for npc in npc_results:
+        if not npc.get("archetype"):
+            npc_id = npc.get("npc_id") or npc.get("id")
+            if npc_id and npc_id in archetype_map:
+                npc["archetype"] = archetype_map[npc_id]
+
+
+def _build_archetype_comparison(
+    parent_report: dict, variant_report: dict,
+) -> list[dict]:
+    """Compare per-archetype interest and adoption between parent and variant."""
+    from collections import defaultdict
+
+    def _group_by_archetype(npc_results: list[dict]) -> dict[str, list[dict]]:
+        groups: dict[str, list[dict]] = defaultdict(list)
+        for npc in npc_results:
+            arch = npc.get("archetype") or "unknown"
+            groups[arch].append(npc)
+        return groups
+
+    parent_npcs = parent_report.get("npc_results", [])
+    variant_npcs = variant_report.get("npc_results", [])
+
+    parent_groups = _group_by_archetype(parent_npcs)
+    variant_groups = _group_by_archetype(variant_npcs)
+
+    all_archetypes = sorted(
+        a for a in (set(parent_groups.keys()) | set(variant_groups.keys()))
+        if a != "unknown"
+    )
+    if not all_archetypes:
+        return []
+    comparison = []
+
+    for arch in all_archetypes:
+        p_npcs = parent_groups.get(arch, [])
+        v_npcs = variant_groups.get(arch, [])
+
+        p_interest = (
+            sum(n.get("interest_score", 0) for n in p_npcs) / len(p_npcs)
+            if p_npcs else 0
+        )
+        v_interest = (
+            sum(n.get("interest_score", 0) for n in v_npcs) / len(v_npcs)
+            if v_npcs else 0
+        )
+
+        entry: dict = {
+            "archetype": arch,
+            "count": max(len(p_npcs), len(v_npcs)),
+            "mean_interest_parent": round(p_interest, 3),
+            "mean_interest_variant": round(v_interest, 3),
+            "interest_delta": round(v_interest - p_interest, 3),
+        }
+
+        # Adoption rates if available
+        p_adopted = [n for n in p_npcs if n.get("adopted")]
+        v_adopted = [n for n in v_npcs if n.get("adopted")]
+        if p_npcs:
+            entry["adoption_rate_parent"] = round(len(p_adopted) / len(p_npcs), 3)
+        if v_npcs:
+            entry["adoption_rate_variant"] = round(len(v_adopted) / len(v_npcs), 3)
+
+        # Dominant stance
+        from collections import Counter
+        if p_npcs:
+            p_stances = Counter(n.get("stance", "unaware") for n in p_npcs)
+            entry["dominant_stance_parent"] = p_stances.most_common(1)[0][0]
+        if v_npcs:
+            v_stances = Counter(n.get("stance", "unaware") for n in v_npcs)
+            entry["dominant_stance_variant"] = v_stances.most_common(1)[0][0]
+
+        comparison.append(entry)
+
+    return comparison
 
 
 @router.get("/{simulation_id}/compare/{variant_id}")
@@ -499,6 +645,29 @@ async def compare_simulations(
     parent_analysis = parent_report.get("analysis", {})
     variant_analysis = variant_report.get("analysis", {})
 
+    # Enrich NPC results with archetype data from simulation events if missing
+    for sim_id, report in [(simulation_id, parent_report), (variant_id, variant_report)]:
+        npcs = report.get("npc_results", [])
+        if npcs and not any(n.get("archetype") for n in npcs):
+            evt_result = await db.execute(
+                select(SimulationEvent.data)
+                .where(SimulationEvent.simulation_id == sim_id)
+                .where(SimulationEvent.event_type == "simulation_start")
+            )
+            evt_row = evt_result.scalar_one_or_none()
+            if evt_row:
+                evt_data = evt_row if isinstance(evt_row, dict) else {}
+                inner = evt_data.get("data", evt_data)
+                arch_map = inner.get("npc_archetypes", {})
+                _enrich_npc_archetypes(npcs, arch_map)
+
+    # Build enhanced diff data
+    changed_fields = variant.changed_fields or []
+    changed_fields_detail = _build_changed_fields_detail(
+        changed_fields, parent, variant,
+    )
+    archetype_comparison = _build_archetype_comparison(parent_report, variant_report)
+
     return {
         "parent": {
             "id": parent.id,
@@ -517,7 +686,8 @@ async def compare_simulations(
             "changed_fields": variant.changed_fields,
         },
         "diff": {
-            "changed_fields": variant.changed_fields or [],
+            "changed_fields": changed_fields,
+            "changed_fields_detail": changed_fields_detail,
             "metrics_delta": metrics_delta,
             "parent_top_objections": parent_analysis.get("top_objections", []),
             "variant_top_objections": variant_analysis.get("top_objections", []),
@@ -525,8 +695,105 @@ async def compare_simulations(
             "variant_segments": variant_analysis.get("segments", []),
             "parent_adoption_likelihood": parent_analysis.get("adoption_likelihood"),
             "variant_adoption_likelihood": variant_analysis.get("adoption_likelihood"),
+            "parent_product_profile": parent_report.get("product_profile"),
+            "variant_product_profile": variant_report.get("product_profile"),
+            "parent_convergence": parent_report.get("convergence"),
+            "variant_convergence": variant_report.get("convergence"),
+            "parent_adoption_breakdown": parent_report.get("adoption_breakdown"),
+            "variant_adoption_breakdown": variant_report.get("adoption_breakdown"),
+            "archetype_comparison": archetype_comparison,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# POST — Generate comparison explanation (LLM call)
+# ---------------------------------------------------------------------------
+
+@router.post("/{simulation_id}/compare/{variant_id}/explain")
+async def explain_comparison(
+    simulation_id: str,
+    variant_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate an AI explanation of WHY a variant produced different results."""
+    parent_result = await db.execute(
+        select(SimulationRecord).where(SimulationRecord.id == simulation_id)
+    )
+    parent = parent_result.scalar_one_or_none()
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent simulation not found")
+
+    variant_result = await db.execute(
+        select(SimulationRecord).where(SimulationRecord.id == variant_id)
+    )
+    variant = variant_result.scalar_one_or_none()
+    if not variant:
+        raise HTTPException(status_code=404, detail="Variant simulation not found")
+
+    if variant.parent_simulation_id != simulation_id:
+        raise HTTPException(
+            status_code=400, detail="Variant does not belong to this parent"
+        )
+
+    if parent.status != "completed" or variant.status != "completed":
+        raise HTTPException(
+            status_code=400, detail="Both simulations must be completed"
+        )
+
+    # Gather data for explanation
+    changed_fields = variant.changed_fields or []
+    changed_fields_detail = _build_changed_fields_detail(
+        changed_fields, parent, variant,
+    )
+
+    parent_metrics = parent.metrics or {}
+    variant_metrics = variant.metrics or {}
+    metrics_delta = {}
+    for key in set(parent_metrics.keys()) | set(variant_metrics.keys()):
+        p_val = parent_metrics.get(key, 0)
+        v_val = variant_metrics.get(key, 0)
+        if isinstance(p_val, (int, float)) and isinstance(v_val, (int, float)):
+            metrics_delta[key] = round(v_val - p_val, 4)
+
+    parent_report = parent.report or {}
+    variant_report = variant.report or {}
+
+    # Enrich NPC results with archetype data from simulation events if missing
+    for sim_id, report in [(simulation_id, parent_report), (variant_id, variant_report)]:
+        npcs = report.get("npc_results", [])
+        if npcs and not any(n.get("archetype") for n in npcs):
+            evt_result = await db.execute(
+                select(SimulationEvent.data)
+                .where(SimulationEvent.simulation_id == sim_id)
+                .where(SimulationEvent.event_type == "simulation_start")
+            )
+            evt_row = evt_result.scalar_one_or_none()
+            if evt_row:
+                evt_data = evt_row if isinstance(evt_row, dict) else {}
+                inner = evt_data.get("data", evt_data)
+                arch_map = inner.get("npc_archetypes", {})
+                _enrich_npc_archetypes(npcs, arch_map)
+
+    archetype_comparison = _build_archetype_comparison(parent_report, variant_report)
+
+    parent_summary = parent_report.get("analysis", {}).get(
+        "executive_summary", "No summary available."
+    )
+    variant_summary = variant_report.get("analysis", {}).get(
+        "executive_summary", "No summary available."
+    )
+
+    from backend.llm.client import llm_client
+    explanation = llm_client.generate_comparison_explanation(
+        changed_fields_detail=changed_fields_detail,
+        metrics_delta=metrics_delta,
+        archetype_comparison=archetype_comparison,
+        parent_summary=parent_summary,
+        variant_summary=variant_summary,
+    )
+
+    return explanation
 
 
 # ---------------------------------------------------------------------------

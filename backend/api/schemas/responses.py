@@ -11,6 +11,7 @@ class SimulationSummary(BaseModel):
     completed_at: datetime | None = None
     metrics: dict | None = None
     parent_simulation_id: str | None = None
+    root_simulation_id: str | None = None
     variant_name: str | None = None
 
 
@@ -28,6 +29,7 @@ class SimulationDetail(BaseModel):
     summary: str | None = None
     metrics: dict | None = None
     parent_simulation_id: str | None = None
+    root_simulation_id: str | None = None
     variant_name: str | None = None
     changed_fields: list[str] | None = None
 

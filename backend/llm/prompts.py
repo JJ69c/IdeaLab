@@ -17,6 +17,7 @@ Rules:
 - Reference the persona's actual interests, pain points, and decision style.
 - Reactions should feel distinct across personas.
 - The interest_adjustment is a HINT, not a score. Keep it small and justified.
+- When verified competitors are listed, only reference those specific products by name. Do not invent competitor names or assume products exist that are not listed.
 - Output valid JSON only. No markdown, no explanation."""
 
 REACTION_USER = """## Idea Being Introduced
@@ -156,14 +157,17 @@ Output as JSON:
 }}"""
 
 
-ASSET_ANALYSIS_SYSTEM = """You are an expert product evaluator analyzing visual assets for a product idea.
-You will see one or more images (screenshots, photos, mockups) representing a product.
-For each dimension, rate 0.0 to 1.0 based on what you see. Be calibrated:
+ASSET_ANALYSIS_SYSTEM = """You are an expert product evaluator analyzing reference assets for a product idea.
+You may see images (screenshots, photos, mockups) and/or asset descriptions with URLs.
+For each dimension, rate 0.0 to 1.0 based on what you can observe or infer. Be calibrated:
 - 0.0-0.2: Poor/unprofessional
 - 0.3-0.4: Below average
 - 0.5: Average/acceptable
 - 0.6-0.7: Good/solid
 - 0.8-1.0: Excellent/exceptional
+
+If only URLs are provided (no images), rate conservatively based on what the URL and context imply.
+A well-known domain or detailed description warrants moderate scores; unknowns stay near 0.5.
 
 Output valid JSON only. No markdown, no explanation."""
 
@@ -192,12 +196,42 @@ Return JSON:
 }}"""
 
 
-def build_extra_context(idea: dict, asset_signals: dict | None = None) -> str:
+def build_extra_context(
+    idea: dict,
+    asset_signals: dict | None = None,
+    competition_context: dict | None = None,
+) -> str:
     """Build optional context lines from structured idea fields."""
     lines = []
     if idea.get("problem_statement"):
         lines.append(f"Problem it solves: {idea['problem_statement']}")
-    if idea.get("existing_alternatives"):
+    # Structured competition context replaces raw alternatives when available.
+    # Only verified competitor names reach the prompt — inferred names are excluded
+    # to prevent the LLM from confidently comparing against unverified products.
+    if competition_context:
+        verified = competition_context.get("verified_names", [])
+        behavioral = competition_context.get("behavioral_descriptions", [])
+        # Count inferred competitors (present in market but not verified by name)
+        alts = competition_context.get("alternatives", [])
+        inferred_count = sum(
+            1 for a in alts if a.get("classification") == "inferred_named_competitor"
+        )
+        if verified:
+            lines.append(f"Verified competitors: {', '.join(verified)}")
+        if inferred_count > 0:
+            lines.append(
+                f"There are also {inferred_count} other competitor(s) mentioned "
+                "but not verified — do not reference them by name."
+            )
+        if behavioral:
+            lines.append(f"Alternative approaches people currently use: {', '.join(behavioral)}")
+        if verified or inferred_count > 0:
+            lines.append(
+                "IMPORTANT: Only reference the verified competitors listed above by name. "
+                "Do not invent, guess, or assume other competitor names."
+            )
+    elif idea.get("existing_alternatives"):
+        # Backward compatibility when no competition context is available
         lines.append(f"Existing alternatives: {idea['existing_alternatives']}")
     if idea.get("differentiator"):
         lines.append(f"Key differentiator: {idea['differentiator']}")
@@ -214,6 +248,108 @@ def build_extra_context(idea: dict, asset_signals: dict | None = None) -> str:
             f"Appeal: {asset_signals.get('visual_appeal', 'N/A')}/1.0"
         )
     return "\n".join(lines) + "\n" if lines else ""
+
+
+# ---------------------------------------------------------------------------
+# Comparison explanation prompts (variant feature)
+# ---------------------------------------------------------------------------
+
+COMPARISON_EXPLANATION_SYSTEM = """You are a product strategy analyst explaining WHY a variant simulation produced different results than the original.
+
+You have:
+- Exactly what parameters changed (with before/after values)
+- How metrics shifted
+- Per-archetype comparison data (how different personas reacted)
+
+Your job is to explain CAUSALITY, not just describe differences. Connect parameter changes to metric shifts through human behavior reasoning.
+
+Rules:
+- Be specific and actionable. Reference the actual parameter changes and their likely behavioral effects.
+- Explain which archetypes shifted most and why.
+- Keep the verdict to 1-2 sentences.
+- Each key_driver should be 1 sentence explaining a causal chain.
+- The recommendation should be actionable and specific.
+- Output valid JSON only. No markdown, no explanation."""
+
+COMPARISON_EXPLANATION_USER = """## What Changed
+{changed_fields_block}
+
+## Metrics Delta (variant minus parent)
+{metrics_delta_block}
+
+## Archetype-Level Comparison
+{archetype_block}
+
+## Parent Summary
+{parent_summary}
+
+## Variant Summary
+{variant_summary}
+
+## Task
+Explain WHY the variant produced different results. Focus on causality.
+
+Return JSON:
+{{
+  "verdict": "1-2 sentence high-level explanation connecting the parameter change to the outcome shift",
+  "key_drivers": [
+    "Causal explanation 1 (parameter change → behavioral effect → metric impact)",
+    "Causal explanation 2"
+  ],
+  "segment_shifts": [
+    {{
+      "segment": "archetype or segment name that shifted most",
+      "change": "how their behavior changed",
+      "reason": "why this parameter change affected them specifically"
+    }}
+  ],
+  "recommendation": "One specific, actionable suggestion based on these results"
+}}"""
+
+
+def format_comparison_explanation_prompt(
+    changed_fields_detail: list[dict],
+    metrics_delta: dict,
+    archetype_comparison: list[dict],
+    parent_summary: str,
+    variant_summary: str,
+) -> str:
+    """Format the user prompt for comparison explanation."""
+    changed_lines = []
+    for cf in changed_fields_detail:
+        changed_lines.append(
+            f"- {cf['label']}: \"{cf['old_value']}\" -> \"{cf['new_value']}\""
+        )
+    changed_fields_block = "\n".join(changed_lines) if changed_lines else "No field changes recorded."
+
+    metrics_lines = []
+    for key, delta in metrics_delta.items():
+        direction = "+" if delta > 0 else ""
+        metrics_lines.append(f"- {key}: {direction}{delta:.4f}")
+    metrics_delta_block = "\n".join(metrics_lines) if metrics_lines else "No metric changes."
+
+    archetype_lines = []
+    for arch in archetype_comparison:
+        line = (
+            f"- {arch['archetype']} (n={arch['count']}): "
+            f"interest {arch['mean_interest_parent']:.2f} -> {arch['mean_interest_variant']:.2f} "
+            f"(delta {arch['interest_delta']:+.3f})"
+        )
+        if "adoption_rate_parent" in arch and "adoption_rate_variant" in arch:
+            line += (
+                f", adoption {arch['adoption_rate_parent']:.0%} -> "
+                f"{arch['adoption_rate_variant']:.0%}"
+            )
+        archetype_lines.append(line)
+    archetype_block = "\n".join(archetype_lines) if archetype_lines else "No archetype data."
+
+    return COMPARISON_EXPLANATION_USER.format(
+        changed_fields_block=changed_fields_block,
+        metrics_delta_block=metrics_delta_block,
+        archetype_block=archetype_block,
+        parent_summary=parent_summary,
+        variant_summary=variant_summary,
+    )
 
 
 def format_ask_npc_system(ctx: dict) -> str:

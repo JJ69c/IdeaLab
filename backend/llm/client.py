@@ -46,6 +46,7 @@ class LLMClient:
     def batch_react(
         self, npc_profiles: list[dict], idea: dict,
         asset_signals_dict: dict | None = None,
+        competition_context_dict: dict | None = None,
     ) -> list[dict]:
         """Get reactions for a batch of NPCs to an idea. Returns list of reaction dicts."""
         from backend.llm.prompts import (
@@ -66,7 +67,11 @@ class LLMClient:
             idea_stage=idea.get("stage", "concept"),
             target_audience=idea.get("target_audience", "general public"),
             price_point=idea.get("price_point", "not specified"),
-            extra_context=build_extra_context(idea, asset_signals=asset_signals_dict),
+            extra_context=build_extra_context(
+                idea,
+                asset_signals=asset_signals_dict,
+                competition_context=competition_context_dict,
+            ),
             personas_block=personas_block,
         )
 
@@ -142,7 +147,9 @@ class LLMClient:
             asset_descriptions=asset_descriptions,
         )
 
-        # Build content array: images first, then the text prompt
+        # Build content array: images first (if any), then the text prompt.
+        # When no images are provided (URL-only assets), this becomes a
+        # text-only call — the LLM rates based on asset descriptions alone.
         content: list[dict] = []
         for block in image_blocks:
             content.append(block)
@@ -171,6 +178,36 @@ class LLMClient:
         except Exception:
             logger.exception("Asset analysis LLM call failed")
             return None
+
+    def generate_comparison_explanation(
+        self,
+        changed_fields_detail: list[dict],
+        metrics_delta: dict,
+        archetype_comparison: list[dict],
+        parent_summary: str,
+        variant_summary: str,
+    ) -> dict:
+        """Generate an LLM explanation of WHY a variant produced different results."""
+        from backend.llm.prompts import (
+            COMPARISON_EXPLANATION_SYSTEM,
+            format_comparison_explanation_prompt,
+        )
+
+        prompt = format_comparison_explanation_prompt(
+            changed_fields_detail=changed_fields_detail,
+            metrics_delta=metrics_delta,
+            archetype_comparison=archetype_comparison,
+            parent_summary=parent_summary,
+            variant_summary=variant_summary,
+        )
+
+        result = self._call_json(
+            COMPARISON_EXPLANATION_SYSTEM, prompt, max_tokens=1024,
+        )
+        if not isinstance(result, dict):
+            logger.warning("Expected dict from comparison explanation, got %s", type(result))
+            return {"verdict": "Explanation generation failed.", "key_drivers": [], "segment_shifts": [], "recommendation": ""}
+        return result
 
     def generate_report(
         self,

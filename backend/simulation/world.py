@@ -87,6 +87,9 @@ class WorldState:
     # Structured signals from reference assets (set by engine when assets provided)
     asset_signals: object | None = None
 
+    # Structured competition analysis (set by engine when alternatives provided)
+    competition_context: object | None = None
+
     @property
     def aware_npcs(self) -> list[Npc]:
         return [n for n in self.npcs.values() if n.state.aware]
@@ -109,7 +112,7 @@ class WorldState:
         if aware == 0:
             return {
                 "awareness_rate": 0, "interest_rate": 0, "rejection_rate": 0,
-                "viral_coefficient": 0, "net_sentiment": 0, "adoption_likelihood": 0,
+                "viral_coefficient": 0, "net_sentiment": 0, "adoption_rate": 0,
             }
 
         interested = sum(1 for n in self.aware_npcs if n.state.stance in ("interested", "curious"))
@@ -121,6 +124,7 @@ class WorldState:
 
         avg_interest = sum(n.state.interest_score for n in self.aware_npcs) / aware
         would_pay_count = sum(1 for n in self.aware_npcs if n.state.would_pay)
+        adopted_count = sum(1 for n in self.aware_npcs if n.state.adopted)
 
         return {
             "total_npcs": total,
@@ -131,9 +135,7 @@ class WorldState:
             "viral_coefficient": round(spreaders / interested, 3) if interested else 0,
             "net_sentiment": round(avg_interest * 2 - 1, 3),  # map 0-1 to -1 to 1
             "would_pay_rate": round(would_pay_count / aware, 3) if aware else 0,
-            "adoption_likelihood": round(
-                (avg_interest * 0.4 + (would_pay_count / aware) * 0.3 + (spreaders / max(interested, 1)) * 0.3), 3
-            ),
+            "adoption_rate": round(adopted_count / aware, 3) if aware else 0,
         }
 
     def get_npc_results(self) -> list[dict]:
@@ -144,6 +146,7 @@ class WorldState:
             result["name"] = npc.name
             result["occupation"] = npc.occupation
             result["age"] = npc.age
+            result["archetype"] = npc.archetype
             results.append(result)
         return results
 
