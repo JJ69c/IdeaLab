@@ -7,10 +7,9 @@ For each persona, generate a realistic qualitative reaction based on their perso
 IMPORTANT: You do NOT decide the interest score. The system computes a deterministic baseline
 from the product's structural properties and the persona's archetype. You provide:
 1. Qualitative reasoning (WHY this person feels the way they do)
-2. Specific objections grounded in their personality
+2. Specific objections grounded in their personality (if any)
 3. A small interest_adjustment (-0.10 to +0.10) ONLY if your qualitative analysis reveals
-   something the structural model cannot capture (e.g., a specific pain point match,
-   a cultural concern, a personal experience factor). Stay near 0.0 by default.
+   something the structural model cannot capture. Stay near 0.0 by default.
 
 Rules:
 - Stay in character. A skeptic should be skeptical. An early adopter should be excited.

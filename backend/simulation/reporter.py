@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from backend.llm.client import llm_client
+from backend.simulation.adoption import compute_world_adoptions
 from backend.simulation.world import WorldState
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,19 @@ def generate_report(world: WorldState, convergence: dict | None = None) -> dict:
     asset_signals = getattr(world, "asset_signals", None)
     if asset_signals is not None:
         report["asset_signals"] = asset_signals.to_dict()
+    competition_context = getattr(world, "competition_context", None)
+    if competition_context is not None:
+        report["competition_context"] = competition_context.to_dict()
+    # Adoption breakdown (final per-NPC adoption already computed by engine)
+    adoption_summary = compute_world_adoptions(world)
+    report["adoption_breakdown"] = {
+        "adoption_rate": adoption_summary["adoption_rate"],
+        "adopted_count": adoption_summary["adopted_count"],
+        "aware_count": adoption_summary["aware_count"],
+        "top_blockers": [
+            {"blocker": b, "count": c} for b, c in adoption_summary["top_blockers"]
+        ],
+    }
     if convergence:
         report["convergence"] = convergence
     return report

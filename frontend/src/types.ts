@@ -96,7 +96,7 @@ export interface SimMetrics {
   viral_coefficient: number
   net_sentiment: number
   would_pay_rate: number
-  adoption_likelihood: number
+  adoption_rate: number
   [key: string]: number
 }
 

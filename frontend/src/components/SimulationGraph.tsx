@@ -641,8 +641,9 @@ export default function SimulationGraph({
 
   if (npcIds.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-400">
-        Waiting for simulation data...
+      <div className="flex flex-col items-center justify-center h-full text-outline gap-2">
+        <span className="material-symbols-outlined text-[32px] text-outline-variant animate-pulse">scatter_plot</span>
+        <span className="text-sm font-medium">Waiting for simulation data...</span>
       </div>
     )
   }
@@ -691,7 +692,7 @@ export default function SimulationGraph({
             refX="8" refY="3"
             orient="auto"
           >
-            <polygon points="0 0, 8 3, 0 6" fill="#6366f1" />
+            <polygon points="0 0, 8 3, 0 6" fill="#0050cb" />
           </marker>
         </defs>
 
@@ -738,19 +739,19 @@ export default function SimulationGraph({
             const infNorm = maxInfluence > 0 ? inf / maxInfluence : 0
 
             let stroke = inf > 0
-              ? `rgba(99, 102, 241, ${0.2 + infNorm * 0.6})`
+              ? `rgba(0, 80, 203, ${0.2 + infNorm * 0.6})`
               : '#e5e7eb'
             let strokeWidth = inf > 0 ? 1 + infNorm * 2.5 : 1
             let opacity = inf > 0 ? 0.4 + infNorm * 0.5 : edge.trust * 0.4 + 0.1
 
             if (isActive) {
-              stroke = '#6366f1'
+              stroke = '#0050cb'
               strokeWidth = 2.5
               opacity = 1
             } else if (isHl) {
               opacity = 0.15
             } else if (isRelated) {
-              stroke = '#a5b4fc'
+              stroke = '#9bb4fe'
               strokeWidth = Math.max(strokeWidth, 2)
               opacity = 0.8
             } else if (hasSelection || highlightedEdge) {
@@ -761,7 +762,7 @@ export default function SimulationGraph({
               } else if (edgeTier >= 1) {
                 // At least one end is 2-hop, other is 1-hop or 2-hop
                 opacity = 0.1
-                stroke = '#c7d2fe'
+                stroke = '#b3c5ff'
               } else {
                 opacity = 0.03
               }
@@ -806,12 +807,12 @@ export default function SimulationGraph({
               <>
                 <line
                   x1={x1} y1={y1} x2={x2} y2={y2}
-                  stroke="#6366f1" strokeWidth={6} opacity={0.15}
+                  stroke="#0050cb" strokeWidth={6} opacity={0.15}
                   strokeLinecap="round"
                 />
                 <line
                   x1={x1} y1={y1} x2={x2} y2={y2}
-                  stroke="#6366f1" strokeWidth={2.5} opacity={0.9}
+                  stroke="#0050cb" strokeWidth={2.5} opacity={0.9}
                   markerEnd="url(#influence-arrow)"
                   strokeLinecap="round"
                 />
@@ -873,35 +874,35 @@ export default function SimulationGraph({
                 {isSelected && (
                   <circle
                     cx={pos.x} cy={pos.y} r={r + 8}
-                    fill="none" stroke="#6366f1" strokeWidth={1.5}
+                    fill="none" stroke="#0050cb" strokeWidth={1.5}
                     className="halo-ring"
                   />
                 )}
                 {isSelected && (
                   <circle
                     cx={pos.x} cy={pos.y} r={r + 4}
-                    fill="none" stroke="#4f46e5" strokeWidth={2}
+                    fill="none" stroke="#0066ff" strokeWidth={2}
                     opacity={0.6}
                   />
                 )}
                 {isConnected && !isSelected && (
                   <circle
                     cx={pos.x} cy={pos.y} r={r + 3}
-                    fill="none" stroke="#a5b4fc" strokeWidth={1.5}
+                    fill="none" stroke="#9bb4fe" strokeWidth={1.5}
                     opacity={0.5}
                   />
                 )}
                 {isHlNode && !isSelected && (
                   <circle
                     cx={pos.x} cy={pos.y} r={r + 4}
-                    fill="none" stroke="#6366f1" strokeWidth={2}
+                    fill="none" stroke="#0050cb" strokeWidth={2}
                     opacity={0.7}
                   />
                 )}
                 <circle
                   cx={pos.x} cy={pos.y} r={r}
                   fill={color}
-                  stroke={isSelected ? '#1e1b4b' : '#fff'}
+                  stroke={isSelected ? '#191b24' : '#fff'}
                   strokeWidth={isSelected ? 2.5 : 1.5}
                   style={{ transition: 'fill 700ms ease, stroke 300ms ease' }}
                 />
@@ -918,14 +919,14 @@ export default function SimulationGraph({
               const is2Hop = twoHopSet.has(lbl.npcId)
 
               let labelOpacity = 1
-              let labelFill = '#6b7280'
+              let labelFill = '#424656'
 
               if (highlightedEdge !== null && !isHlLabel) {
                 labelOpacity = 0.15
-                labelFill = '#d1d5db'
+                labelFill = '#c2c6d8'
               } else if (hasSelection) {
-                if (is1Hop) { labelOpacity = 1; labelFill = '#6b7280' }
-                else if (is2Hop) { labelOpacity = 0.5; labelFill = '#9ca3af' }
+                if (is1Hop) { labelOpacity = 1; labelFill = '#424656' }
+                else if (is2Hop) { labelOpacity = 0.5; labelFill = '#727687' }
                 else { labelOpacity = 0.15; labelFill = '#d1d5db' }
               }
 
@@ -937,7 +938,7 @@ export default function SimulationGraph({
                   textAnchor={lbl.anchor}
                   fontSize="9"
                   fill={labelFill}
-                  fontFamily="system-ui"
+                  fontFamily="Inter, system-ui, sans-serif"
                   opacity={labelOpacity}
                   style={{ transition: 'fill 300ms ease, opacity 200ms ease' }}
                 >
@@ -957,8 +958,8 @@ export default function SimulationGraph({
                   y={pos.y + r + 12}
                   textAnchor="middle"
                   fontSize="9"
-                  fill="#6b7280"
-                  fontFamily="system-ui"
+                  fill="#424656"
+                  fontFamily="Inter, system-ui, sans-serif"
                 >
                   {view.scale > 1.8 ? npc.name : npc.name.split(' ')[0]}
                 </text>
@@ -972,38 +973,36 @@ export default function SimulationGraph({
       <div className="absolute top-3 left-3 flex flex-col items-center gap-1 select-none">
         <button
           onClick={zoomIn}
-          className="w-8 h-8 flex items-center justify-center bg-white/90 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 text-sm font-medium shadow-sm backdrop-blur-sm"
+          className="w-8 h-8 flex items-center justify-center glass-panel border border-white/40 rounded-xl text-on-surface-variant hover:bg-surface-container-high text-sm font-medium shadow-sm"
           title="Zoom in"
         >
-          +
+          <span className="material-symbols-outlined text-[18px]">add</span>
         </button>
-        <span className="text-[10px] text-gray-400 tabular-nums">{zoomPercent}%</span>
+        <span className="text-[10px] text-outline tabular-nums font-semibold">{zoomPercent}%</span>
         <button
           onClick={zoomOut}
-          className="w-8 h-8 flex items-center justify-center bg-white/90 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 text-sm font-medium shadow-sm backdrop-blur-sm"
+          className="w-8 h-8 flex items-center justify-center glass-panel border border-white/40 rounded-xl text-on-surface-variant hover:bg-surface-container-high text-sm font-medium shadow-sm"
           title="Zoom out"
         >
-          &minus;
+          <span className="material-symbols-outlined text-[18px]">remove</span>
         </button>
         <button
           onClick={resetViewAnimated}
-          className="w-8 h-8 flex items-center justify-center bg-white/90 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 shadow-sm backdrop-blur-sm mt-1"
+          className="w-8 h-8 flex items-center justify-center glass-panel border border-white/40 rounded-xl text-on-surface-variant hover:bg-surface-container-high shadow-sm mt-1"
           title="Reset view"
         >
-          <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="2" y="2" width="12" height="12" rx="1.5" />
-            <circle cx="8" cy="8" r="2" />
-          </svg>
+          <span className="material-symbols-outlined text-[16px]">fit_screen</span>
         </button>
       </div>
 
       {/* ── Edge hover tooltip ── */}
       {hoveredDetail && (
-        <div className="absolute bottom-3 left-3 bg-white/95 border border-gray-200 rounded-lg px-3 py-2 shadow-md text-xs max-w-[260px] backdrop-blur-sm pointer-events-none">
-          <div className="font-medium text-gray-700 mb-1">
+        <div className="absolute bottom-3 left-3 glass-panel border border-white/40 rounded-2xl px-4 py-3 shadow-lg text-xs max-w-[280px] pointer-events-none">
+          <div className="font-semibold text-on-surface mb-1.5 flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[14px] text-primary">link</span>
             {hoveredDetail.sourceName.split(' ')[0]} &harr; {hoveredDetail.targetName.split(' ')[0]}
           </div>
-          <div className="flex gap-3 text-gray-500">
+          <div className="flex gap-3 text-on-surface-variant">
             <span>Trust: {(hoveredDetail.trust * 100).toFixed(0)}%</span>
             {hoveredDetail.discussionCount > 0 && (
               <span>{hoveredDetail.discussionCount} discussion{hoveredDetail.discussionCount !== 1 ? 's' : ''}</span>
@@ -1013,7 +1012,7 @@ export default function SimulationGraph({
             )}
           </div>
           {hoveredDetail.keyPoints.length > 0 && (
-            <div className="mt-1 text-gray-400 italic">
+            <div className="mt-1.5 text-outline italic">
               {hoveredDetail.keyPoints.map((kp, i) => (
                 <span key={i}>"{kp}"{i < hoveredDetail.keyPoints.length - 1 ? ' · ' : ''}</span>
               ))}

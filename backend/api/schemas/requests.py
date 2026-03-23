@@ -24,11 +24,14 @@ class IdeaInput(BaseModel):
 class SimulationConfigInput(BaseModel):
     num_ticks: int = Field(default=8, ge=3, le=20, description="Number of simulation rounds")
     population_size: int = Field(default=30, ge=10, le=50, description="Number of NPCs")
-    seed_count: int = Field(default=5, ge=1, le=15, description="NPCs initially exposed")
+    seed_count: int = Field(default=8, ge=1, le=15, description="NPCs initially exposed")
 
 
 class AssetReference(BaseModel):
-    asset_id: str = Field(..., description="ID returned by the upload endpoint")
+    asset_id: str | None = Field(
+        default=None,
+        description="ID returned by the upload endpoint (None for URL-only assets)",
+    )
     asset_type: str = Field(
         ...,
         description="Asset type: website, app_ui, product_photo, packaging, prototype, marketing_visual",

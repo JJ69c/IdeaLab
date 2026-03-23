@@ -56,7 +56,7 @@ class InjectedIdea:
 class SimConfig:
     num_ticks: int = 8
     population_size: int = 30
-    seed_count: int = 5
+    seed_count: int = 8
 
 
 @dataclass

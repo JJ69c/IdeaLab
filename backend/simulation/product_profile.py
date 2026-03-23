@@ -81,13 +81,19 @@ class ProductProfile:
 
 
 def build_product_profile(
-    idea: InjectedIdea, asset_signals: object | None = None
+    idea: InjectedIdea,
+    asset_signals: object | None = None,
+    competition_context: object | None = None,
 ) -> ProductProfile:
     """Derive a ProductProfile from raw InjectedIdea fields.
 
     If asset_signals is provided (an AssetSignals instance), its dimensions
     nudge the base profile: polished visuals reduce trust barrier and trial
     friction, clear screenshots boost utility clarity, etc.
+
+    If competition_context is provided (a CompetitionContext instance), it
+    replaces the raw comma-count formula for market_saturation and refines
+    novelty and trust_barrier based on structured competition dimensions.
     """
 
     cat = idea.category.lower().strip()
@@ -103,34 +109,40 @@ def build_product_profile(
     # Concept-stage ideas in less-known categories feel more novel
     stage_novelty = {"concept": 0.85, "prototype": 0.65, "mvp": 0.45, "launched": 0.25}
     n = stage_novelty.get(stage, 0.65)
-    if has_alternatives:
+    if competition_context is not None:
+        n -= competition_context.direct_competition_intensity * 0.25
+    elif has_alternatives:
         n -= 0.20  # market already exists → less novel
     if cat in _MATURE_CATEGORIES:
         n -= 0.15
     novelty = _clamp(n)
 
     # --- utility_clarity ---
-    uc = 0.30  # baseline: vague
+    # Reduced bonuses: filling in form fields demonstrates description
+    # clarity, not product strength. A well-worded mediocre idea should
+    # not score as high as a genuinely clear value proposition.
+    uc = 0.25  # baseline: vague
     if has_problem:
-        uc += 0.25
+        uc += 0.18
     if desc_len > 150:
-        uc += 0.15
-    elif desc_len > 80:
-        uc += 0.08
-    if has_differentiator:
-        uc += 0.15
-    if has_strengths:
         uc += 0.10
+    elif desc_len > 80:
+        uc += 0.05
+    if has_differentiator:
+        uc += 0.10
+    if has_strengths:
+        uc += 0.07
     utility_clarity = _clamp(uc)
 
     # --- differentiation ---
+    # Reduced: having a differentiator field doesn't prove real
+    # differentiation — it only means the founder articulated one.
     if not has_alternatives:
-        # No known alternatives — could be very novel or just undefined
-        diff = 0.55 + (0.15 if has_differentiator else 0)
+        diff = 0.45 + (0.10 if has_differentiator else 0)
     elif has_differentiator:
-        diff = 0.70
+        diff = 0.55
     else:
-        diff = 0.30  # alternatives exist but no clear differentiator
+        diff = 0.25  # alternatives exist but no clear differentiator
     differentiation = _clamp(diff)
 
     # --- price_friction ---
@@ -150,17 +162,21 @@ def build_product_profile(
         tb += 0.20
     if has_risks:
         tb += 0.05  # founder acknowledges risks → slightly more scrutiny
+    if competition_context is not None:
+        tb += competition_context.incumbent_trust_pressure * 0.10
     trust_barrier = _clamp(tb)
 
     # --- identity_fit (baseline, refined per-NPC later) ---
-    # Higher if the idea clearly targets someone (has audience + problem)
-    idf = 0.40
+    # Reduced bonuses: specifying a target audience doesn't guarantee
+    # the product actually fits that audience. Real identity fit is
+    # further adjusted per-NPC via category-archetype affinity.
+    idf = 0.35
     if idea.target_audience.strip() and idea.target_audience != "general public":
-        idf += 0.20
-    if has_problem:
         idf += 0.15
-    if has_strengths:
+    if has_problem:
         idf += 0.10
+    if has_strengths:
+        idf += 0.05
     identity_fit = _clamp(idf)
 
     # --- trial_friction ---
@@ -178,8 +194,10 @@ def build_product_profile(
 
     # --- market_saturation ---
     ms = 0.25
-    if has_alternatives:
-        # Count rough number of alternatives mentioned
+    if competition_context is not None:
+        ms += competition_context.saturation_pressure * 0.40
+    elif has_alternatives:
+        # Backward compatibility fallback (comma-count when no CompetitionContext)
         alt_count = len(re.split(r"[,;&/]|\band\b", idea.existing_alternatives))
         ms += min(alt_count * 0.10, 0.40)
     if cat in _MATURE_CATEGORIES:

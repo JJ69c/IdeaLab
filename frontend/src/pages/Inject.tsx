@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 
 // ---------------------------------------------------------------------------
@@ -69,10 +69,10 @@ const CATEGORY_GROUPS: { label: string; options: { value: string; label: string 
 ]
 
 const STAGE_OPTIONS = [
-  { value: 'concept', label: 'Just an idea' },
-  { value: 'prototype', label: 'Prototype / Wireframes' },
-  { value: 'mvp', label: 'Working MVP' },
-  { value: 'launched', label: 'Already launched' },
+  { value: 'concept', label: 'Just an idea', icon: 'lightbulb' },
+  { value: 'prototype', label: 'Prototype', icon: 'draw' },
+  { value: 'mvp', label: 'Working MVP', icon: 'code' },
+  { value: 'launched', label: 'Launched', icon: 'rocket_launch' },
 ]
 
 const PRICE_PRESETS = [
@@ -99,14 +99,14 @@ const ASSET_TYPE_OPTIONS = [
 const MAX_ASSETS = 5
 
 interface AssetEntry {
-  id: string          // client-side key
+  id: string
   file: File | null
   fileName: string
   assetType: string
   url: string
   note: string
   uploading: boolean
-  assetId: string | null  // server-side ID after upload
+  assetId: string | null
   error: string
 }
 
@@ -158,57 +158,29 @@ function nearestLabel(value: number, labels: Record<number, string>): string {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function SectionHeader({ number, title, subtitle }: {
+function SectionPanel({ number, title, subtitle, icon, children }: {
   number: number
   title: string
   subtitle: string
-}) {
-  return (
-    <div className="mb-4">
-      <div className="flex items-center gap-2 mb-0.5">
-        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
-          {number}
-        </span>
-        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-      </div>
-      <p className="text-sm text-gray-500 ml-8">{subtitle}</p>
-    </div>
-  )
-}
-
-function CollapsibleSection({ number, title, subtitle, defaultOpen, children }: {
-  number: number
-  title: string
-  subtitle: string
-  defaultOpen: boolean
+  icon: string
   children: React.ReactNode
 }) {
-  const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full px-5 py-4 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
-            {number}
-          </span>
-          <div className="text-left">
-            <span className="text-sm font-semibold text-gray-900">{title}</span>
-            <span className="text-xs text-gray-500 ml-2">{subtitle}</span>
-          </div>
+    <section className="glass-panel rounded-3xl border border-white/40 p-6">
+      <div className="flex items-center gap-3 mb-5">
+        <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-primary-container text-white text-sm font-bold shadow-lg shadow-primary/20">
+          {number}
         </div>
-        <svg
-          className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      {open && <div className="px-5 py-4 space-y-4">{children}</div>}
-    </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-primary">{icon}</span>
+            <h2 className="text-lg font-bold text-on-surface tracking-tight">{title}</h2>
+          </div>
+          <p className="text-xs text-on-surface-variant mt-0.5">{subtitle}</p>
+        </div>
+      </div>
+      <div className="space-y-4">{children}</div>
+    </section>
   )
 }
 
@@ -218,16 +190,86 @@ function FieldLabel({ label, required, hint }: {
   hint?: string
 }) {
   return (
-    <label className="block text-sm font-medium text-gray-700 mb-1">
+    <label className="block text-xs font-semibold text-on-surface-variant mb-1.5 uppercase tracking-wider">
       {label}
-      {required && <span className="text-red-400 ml-0.5">*</span>}
-      {hint && <span className="font-normal text-gray-400 ml-1.5">{hint}</span>}
+      {required && <span className="text-error ml-0.5">*</span>}
+      {hint && <span className="font-normal text-outline normal-case tracking-normal ml-1.5">{hint}</span>}
     </label>
   )
 }
 
-const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none transition'
+const inputClass = 'w-full border border-outline-variant/30 bg-surface-container-lowest rounded-xl px-4 py-2.5 text-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/10 transition-all'
 const selectClass = inputClass
+
+function TagInput({ value, onChange, placeholder }: {
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+}) {
+  const [inputValue, setInputValue] = useState('')
+  const tags = value ? value.split(',').map(s => s.trim()).filter(Boolean) : []
+
+  const addTag = (tag: string) => {
+    const trimmed = tag.trim()
+    if (!trimmed) return
+    const newTags = [...tags, trimmed]
+    onChange(newTags.join(', '))
+    setInputValue('')
+  }
+
+  const removeTag = (index: number) => {
+    const newTags = tags.filter((_, i) => i !== index)
+    onChange(newTags.join(', '))
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      addTag(inputValue)
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {tags.map((tag, i) => (
+          <span
+            key={i}
+            className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1 rounded-lg bg-primary/8 text-primary border border-primary/15"
+          >
+            {tag}
+            <button
+              type="button"
+              onClick={() => removeTag(i)}
+              className="text-primary/50 hover:text-primary transition-colors"
+            >
+              <span className="material-symbols-outlined text-[14px]">close</span>
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          className={inputClass}
+          placeholder={placeholder}
+          value={inputValue}
+          onChange={e => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+        <button
+          type="button"
+          onClick={() => addTag(inputValue)}
+          disabled={!inputValue.trim()}
+          className="flex-shrink-0 flex items-center gap-1 text-xs font-semibold px-3 py-2 rounded-xl border border-primary/20 text-primary hover:bg-primary/5 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        >
+          <span className="material-symbols-outlined text-[14px]">add</span>
+          Add
+        </button>
+      </div>
+    </div>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -248,26 +290,19 @@ export default function Inject() {
 
   // --- Form state ---
   const [form, setForm] = useState({
-    // Section 1: The Idea
     title: '',
     description: '',
     category: '',
     customCategory: '',
     stage: 'concept',
-
-    // Section 2: Market Positioning
     target_audience: '',
     problem_statement: '',
     price_point: '',
     customPrice: '',
     existing_alternatives: '',
     differentiator: '',
-
-    // Section 3: Strengths & Risks
     known_strengths: '',
     known_risks: '',
-
-    // Section 4: Simulation Controls
     num_ticks: 8,
     population_size: 30,
     seed_count: 5,
@@ -286,11 +321,8 @@ export default function Inject() {
         const meta = data.idea_metadata || {}
         const config = data.config || {}
 
-        // Determine if category is a known value or custom
         const allKnownCategories = CATEGORY_GROUPS.flatMap(g => g.options.map(o => o.value))
         const isKnownCategory = allKnownCategories.includes(data.idea_category)
-
-        // Determine if price is a known preset or custom
         const isKnownPrice = PRICE_PRESETS.includes(meta.price_point || '')
 
         setForm({
@@ -318,6 +350,7 @@ export default function Inject() {
 
   // --- Asset state ---
   const [assets, setAssets] = useState<AssetEntry[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const addAsset = () => {
     if (assets.length < MAX_ASSETS) {
@@ -356,6 +389,17 @@ export default function Inject() {
     }
   }
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (assets.length >= MAX_ASSETS) return
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.type.startsWith('image/')) {
+      const newAsset = createEmptyAsset()
+      setAssets(a => [...a, newAsset])
+      uploadAssetFile(newAsset, file)
+    }
+  }
+
   // Resolve "custom" selects
   const resolvedCategory = form.category === '_custom'
     ? form.customCategory
@@ -370,11 +414,11 @@ export default function Inject() {
     setError('')
 
     try {
-      // Build asset refs from successfully uploaded assets
+      // Include both uploaded assets and URL-only assets
       const assetRefs = assets
-        .filter(a => a.assetId)
+        .filter(a => a.assetId || a.url.trim())
         .map(a => ({
-          asset_id: a.assetId,
+          asset_id: a.assetId || null,
           asset_type: a.assetType,
           url: a.url || null,
           note: a.note,
@@ -422,244 +466,284 @@ export default function Inject() {
     }
   }
 
+  const estimatedCost = (form.num_ticks * form.population_size * 0.0001 + 0.02).toFixed(2)
+  const durationMin = Math.ceil(form.num_ticks * form.population_size * 0.12)
+  const durationMax = Math.ceil(form.num_ticks * form.population_size * 0.2)
+
   if (prefilling) {
-    return <p className="text-gray-500">Loading parent simulation data...</p>
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-outline gap-3">
+        <span className="material-symbols-outlined text-[32px] animate-pulse">hourglass_empty</span>
+        <span className="text-sm font-medium">Loading parent simulation data...</span>
+      </div>
+    )
   }
 
   return (
-    <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold mb-1">
-        {variantParent ? 'Create Variant' : 'Set Up Simulation'}
-      </h1>
-      <p className="text-sm text-gray-500 mb-4">
-        {variantParent
-          ? 'Adjust parameters and re-run to compare results.'
-          : 'Define your idea and configure how the simulated population will evaluate it.'}
-      </p>
+    <div className="max-w-2xl pb-28">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-on-surface tracking-tight">
+          {variantParent ? 'Create Variant' : 'Set Up Simulation'}
+        </h1>
+        <p className="text-on-surface-variant mt-1">
+          {variantParent
+            ? 'Adjust parameters and re-run to compare results.'
+            : 'Define your idea and configure how the simulated population will evaluate it.'}
+        </p>
+      </div>
 
+      {/* Variant banner */}
       {variantParent && (
-        <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 mb-6 flex items-center justify-between">
-          <div className="text-sm">
-            <span className="text-indigo-600 font-medium">Variant of:</span>{' '}
+        <div className="glass-panel rounded-2xl border border-primary/20 px-5 py-3 mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="material-symbols-outlined text-[18px] text-primary">fork_right</span>
+            <span className="text-on-surface-variant font-medium">Variant of:</span>
             <Link
               to={`/report/${variantParent.id}`}
-              className="text-indigo-700 underline hover:text-indigo-900"
+              className="text-primary font-semibold hover:underline"
             >
               {variantParent.idea_title}
             </Link>
           </div>
-          <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
+          <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-lg bg-primary/10 text-primary">
             What-If
           </span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-5">
 
         {/* ---- Section 1: The Idea ---- */}
-        <section>
-          <SectionHeader number={1} title="The Idea" subtitle="What are you testing?" />
-
-          <div className="space-y-4 ml-8">
-            <div>
-              <FieldLabel label="Idea Name" required />
-              <input
-                type="text"
-                required
-                className={inputClass}
-                placeholder="e.g. FocusFlow, PetBuddy, GreenLedger"
-                value={form.title}
-                onChange={e => update('title', e.target.value)}
-              />
-            </div>
-
-            <div>
-              <FieldLabel label="What is it?" required hint="Be specific — the simulation quality depends on this" />
-              <textarea
-                required
-                rows={4}
-                className={inputClass}
-                placeholder={"Describe what the product does, who uses it, and how it works.\n\ne.g. \"An AI-powered focus timer that blocks distracting apps and uses gentle nudges to keep remote workers in deep focus sessions. Integrates with Slack to auto-set status.\""}
-                value={form.description}
-                onChange={e => update('description', e.target.value)}
-              />
-              <div className="text-xs text-gray-400 mt-1 text-right">
-                {form.description.length > 0 && `${form.description.length} chars`}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <FieldLabel label="Category" required />
-                <select
-                  required
-                  className={selectClass}
-                  value={form.category}
-                  onChange={e => update('category', e.target.value)}
-                >
-                  <option value="" disabled>Select a category...</option>
-                  {CATEGORY_GROUPS.map(group => (
-                    <optgroup key={group.label} label={group.label}>
-                      {group.options.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                  <option value="_custom">Custom...</option>
-                </select>
-                {form.category === '_custom' && (
-                  <input
-                    type="text"
-                    required
-                    className={`${inputClass} mt-2`}
-                    placeholder="Enter custom category"
-                    value={form.customCategory}
-                    onChange={e => update('customCategory', e.target.value)}
-                  />
-                )}
-              </div>
-
-              <div>
-                <FieldLabel label="Idea Stage" />
-                <select
-                  className={selectClass}
-                  value={form.stage}
-                  onChange={e => update('stage', e.target.value)}
-                >
-                  {STAGE_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+        <SectionPanel number={1} title="The Idea" subtitle="What are you testing?" icon="lightbulb">
+          <div>
+            <FieldLabel label="Idea Name" required />
+            <input
+              type="text"
+              required
+              className={inputClass}
+              placeholder="e.g. FocusFlow, PetBuddy, GreenLedger"
+              value={form.title}
+              onChange={e => update('title', e.target.value)}
+            />
           </div>
-        </section>
 
-        {/* ---- Section 2: Market Positioning ---- */}
-        <section>
-          <SectionHeader number={2} title="Market Positioning" subtitle="Who is this for and how does it compete?" />
-
-          <div className="space-y-4 ml-8">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <FieldLabel label="Target Audience" required />
-              <input
-                type="text"
+              <FieldLabel label="Category" required />
+              <select
                 required
-                className={inputClass}
-                placeholder="e.g. remote workers aged 25-40, indie game developers, small restaurant owners"
-                value={form.target_audience}
-                onChange={e => update('target_audience', e.target.value)}
-              />
-            </div>
-
-            <div>
-              <FieldLabel label="Problem it Solves" hint="optional" />
-              <textarea
-                rows={2}
-                className={inputClass}
-                placeholder="What pain point or unmet need does this address?"
-                value={form.problem_statement}
-                onChange={e => update('problem_statement', e.target.value)}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <FieldLabel label="Pricing" />
-                <select
-                  className={selectClass}
-                  value={form.price_point}
-                  onChange={e => update('price_point', e.target.value)}
-                >
-                  <option value="">Not decided yet</option>
-                  {PRICE_PRESETS.map(p => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                  <option value="_custom">Custom...</option>
-                </select>
-                {form.price_point === '_custom' && (
-                  <input
-                    type="text"
-                    className={`${inputClass} mt-2`}
-                    placeholder="e.g. $299 one-time, $0.01 per API call"
-                    value={form.customPrice}
-                    onChange={e => update('customPrice', e.target.value)}
-                  />
-                )}
-              </div>
-
-              <div>
-                <FieldLabel label="Existing Alternatives" hint="optional" />
+                className={selectClass}
+                value={form.category}
+                onChange={e => update('category', e.target.value)}
+              >
+                <option value="" disabled>Select a category...</option>
+                {CATEGORY_GROUPS.map(group => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.options.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+                <option value="_custom">Custom...</option>
+              </select>
+              {form.category === '_custom' && (
                 <input
                   type="text"
-                  className={inputClass}
-                  placeholder="e.g. Notion, Trello, pen and paper"
-                  value={form.existing_alternatives}
-                  onChange={e => update('existing_alternatives', e.target.value)}
+                  required
+                  className={`${inputClass} mt-2`}
+                  placeholder="Enter custom category"
+                  value={form.customCategory}
+                  onChange={e => update('customCategory', e.target.value)}
                 />
-              </div>
+              )}
             </div>
 
             <div>
-              <FieldLabel label="Key Differentiator" hint="optional" />
+              <FieldLabel label="Idea Stage" />
+              <div className="flex gap-1.5 flex-wrap">
+                {STAGE_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => update('stage', opt.value)}
+                    className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border transition-all ${
+                      form.stage === opt.value
+                        ? 'bg-primary text-on-primary border-primary shadow-lg shadow-primary/20'
+                        : 'border-outline-variant/30 text-on-surface-variant hover:border-primary/30 hover:text-primary hover:bg-primary/5'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[14px]">{opt.icon}</span>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <FieldLabel label="What is it?" required hint="Be specific — the simulation quality depends on this" />
+            <textarea
+              required
+              rows={4}
+              className={inputClass}
+              placeholder={"Describe what the product does, who uses it, and how it works.\n\ne.g. \"An AI-powered focus timer that blocks distracting apps and uses gentle nudges to keep remote workers in deep focus sessions. Integrates with Slack to auto-set status.\""}
+              value={form.description}
+              onChange={e => update('description', e.target.value)}
+            />
+            {form.description.length > 0 && (
+              <div className="text-[10px] text-outline mt-1 text-right">
+                {form.description.length} chars
+              </div>
+            )}
+          </div>
+        </SectionPanel>
+
+        {/* ---- Section 2: Market Positioning ---- */}
+        <SectionPanel number={2} title="Market Positioning" subtitle="Who is this for and how does it compete?" icon="storefront">
+          <div>
+            <FieldLabel label="Target Audience" required />
+            <input
+              type="text"
+              required
+              className={inputClass}
+              placeholder="e.g. remote workers aged 25-40, indie game developers, small restaurant owners"
+              value={form.target_audience}
+              onChange={e => update('target_audience', e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <FieldLabel label="Pricing Strategy" />
+              <select
+                className={selectClass}
+                value={form.price_point}
+                onChange={e => update('price_point', e.target.value)}
+              >
+                <option value="">Not decided yet</option>
+                {PRICE_PRESETS.map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+                <option value="_custom">Custom...</option>
+              </select>
+              {form.price_point === '_custom' && (
+                <input
+                  type="text"
+                  className={`${inputClass} mt-2`}
+                  placeholder="e.g. $299 one-time, $0.01 per API call"
+                  value={form.customPrice}
+                  onChange={e => update('customPrice', e.target.value)}
+                />
+              )}
+            </div>
+
+            <div>
+              <FieldLabel label="Existing Alternatives" hint="optional" />
               <input
                 type="text"
                 className={inputClass}
-                placeholder="What makes this worth switching from alternatives?"
-                value={form.differentiator}
-                onChange={e => update('differentiator', e.target.value)}
+                placeholder="e.g. Notion, Trello, pen and paper"
+                value={form.existing_alternatives}
+                onChange={e => update('existing_alternatives', e.target.value)}
               />
             </div>
           </div>
-        </section>
 
-        {/* ---- Section 3: Reference Assets (collapsible) ---- */}
-        <CollapsibleSection
-          number={3}
-          title="Reference Assets"
-          subtitle="optional \u2014 screenshots, mockups, photos"
-          defaultOpen={false}
-        >
-          <p className="text-xs text-gray-500 mb-3">
+          <div>
+            <FieldLabel label="Problem it Solves" hint="optional" />
+            <textarea
+              rows={2}
+              className={inputClass}
+              placeholder="What pain point or unmet need does this address?"
+              value={form.problem_statement}
+              onChange={e => update('problem_statement', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <FieldLabel label="Key Differentiator" hint="optional" />
+            <input
+              type="text"
+              className={inputClass}
+              placeholder="What makes this worth switching from alternatives?"
+              value={form.differentiator}
+              onChange={e => update('differentiator', e.target.value)}
+            />
+          </div>
+        </SectionPanel>
+
+        {/* ---- Section 3: Reference Assets ---- */}
+        <SectionPanel number={3} title="Reference Assets" subtitle="Optional — screenshots, mockups, photos" icon="image">
+          <p className="text-xs text-on-surface-variant -mt-1">
             Upload product screenshots, UI mockups, packaging photos, or landing page screenshots.
             These will be analyzed to assess perceived polish, trust, and visual appeal.
           </p>
 
+          {/* Drag-and-drop zone */}
+          {assets.length < MAX_ASSETS && (
+            <div
+              onDragOver={e => e.preventDefault()}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-outline-variant/30 rounded-2xl p-8 text-center cursor-pointer hover:border-primary/30 hover:bg-primary/3 transition-all group"
+            >
+              <span className="material-symbols-outlined text-[32px] text-outline-variant group-hover:text-primary transition-colors">cloud_upload</span>
+              <p className="text-sm text-on-surface-variant mt-2">Drag & drop images here or click to browse</p>
+              <p className="text-[10px] text-outline mt-1">JPEG, PNG, WebP, GIF — up to {MAX_ASSETS} files</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0]
+                  if (file && assets.length < MAX_ASSETS) {
+                    const newAsset = createEmptyAsset()
+                    setAssets(a => [...a, newAsset])
+                    uploadAssetFile(newAsset, file)
+                  }
+                  e.target.value = ''
+                }}
+              />
+            </div>
+          )}
+
+          {/* Uploaded assets */}
           {assets.map((entry) => (
-            <div key={entry.id} className="border border-gray-200 rounded-lg p-3 space-y-2 relative">
+            <div key={entry.id} className="bg-surface-container-lowest border border-outline-variant/20 rounded-2xl p-4 space-y-3 relative">
               <button
                 type="button"
                 onClick={() => removeAsset(entry.id)}
-                className="absolute top-2 right-2 text-gray-400 hover:text-red-500 text-sm"
+                className="absolute top-3 right-3 text-outline hover:text-error transition-colors"
                 title="Remove asset"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <FieldLabel label="Image" />
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    className="w-full text-sm text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                    onChange={e => {
-                      const file = e.target.files?.[0]
-                      if (file) uploadAssetFile(entry, file)
-                    }}
-                  />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center flex-shrink-0">
+                  <span className="material-symbols-outlined text-[20px] text-on-surface-variant">
+                    {entry.uploading ? 'hourglass_empty' : entry.assetId ? 'check_circle' : 'image'}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-on-surface truncate">
+                    {entry.fileName || 'No file selected'}
+                  </p>
                   {entry.uploading && (
-                    <p className="text-xs text-indigo-500 mt-1">Uploading...</p>
+                    <p className="text-[10px] text-primary animate-pulse">Uploading...</p>
                   )}
                   {entry.assetId && !entry.uploading && (
-                    <p className="text-xs text-green-600 mt-1">Uploaded</p>
+                    <p className="text-[10px] text-green-600">Uploaded successfully</p>
                   )}
                   {entry.error && (
-                    <p className="text-xs text-red-500 mt-1">{entry.error}</p>
+                    <p className="text-[10px] text-error">{entry.error}</p>
                   )}
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <FieldLabel label="Asset Type" />
                   <select
@@ -672,11 +756,22 @@ export default function Inject() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <FieldLabel label="Note" hint="optional" />
+                  <input
+                    type="text"
+                    className={inputClass}
+                    placeholder="e.g. final product look"
+                    maxLength={200}
+                    value={entry.note}
+                    onChange={e => updateAsset(entry.id, { note: e.target.value })}
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {!entry.fileName && (
                 <div>
-                  <FieldLabel label="URL" hint="optional" />
+                  <FieldLabel label="Or provide a URL" hint="optional" />
                   <input
                     type="text"
                     className={inputClass}
@@ -685,171 +780,204 @@ export default function Inject() {
                     onChange={e => updateAsset(entry.id, { url: e.target.value })}
                   />
                 </div>
+              )}
+
+              {!entry.fileName && (
                 <div>
-                  <FieldLabel label="Note" hint="optional" />
+                  <FieldLabel label="Image" />
                   <input
-                    type="text"
-                    className={inputClass}
-                    placeholder="e.g. final product look, early prototype"
-                    maxLength={200}
-                    value={entry.note}
-                    onChange={e => updateAsset(entry.id, { note: e.target.value })}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="w-full text-sm text-on-surface-variant file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/15 transition-colors"
+                    onChange={e => {
+                      const file = e.target.files?.[0]
+                      if (file) uploadAssetFile(entry, file)
+                    }}
                   />
                 </div>
-              </div>
+              )}
             </div>
           ))}
 
-          {assets.length < MAX_ASSETS && (
+          {assets.length > 0 && assets.length < MAX_ASSETS && (
             <button
               type="button"
               onClick={addAsset}
-              className="w-full border border-dashed border-gray-300 rounded-lg py-2 text-sm text-gray-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors"
+              className="w-full border border-dashed border-outline-variant/30 rounded-xl py-2.5 text-xs font-semibold text-on-surface-variant hover:border-primary/30 hover:text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-1.5"
             >
-              + Add Reference Asset {assets.length > 0 && `(${assets.length}/${MAX_ASSETS})`}
+              <span className="material-symbols-outlined text-[16px]">add</span>
+              Add Another Asset ({assets.length}/{MAX_ASSETS})
             </button>
           )}
-        </CollapsibleSection>
+        </SectionPanel>
 
-        {/* ---- Section 4: Strengths & Risks (collapsible) ---- */}
-        <CollapsibleSection
-          number={4}
-          title="Strengths & Risks"
-          subtitle="optional \u2014 seed the simulation with what you already know"
-          defaultOpen={false}
-        >
+        {/* ---- Section 4: Strengths & Risks ---- */}
+        <SectionPanel number={4} title="Analysis" subtitle="Optional — seed the simulation with what you already know" icon="analytics">
           <div>
-            <FieldLabel label="Known Strengths" hint="What do you think is strong about this idea?" />
-            <textarea
-              rows={2}
-              className={inputClass}
-              placeholder="e.g. Strong viral loop through team invites, solves a problem people actively complain about on Twitter"
+            <FieldLabel label="Key Strengths" hint="Press Enter to add each strength" />
+            <TagInput
               value={form.known_strengths}
-              onChange={e => update('known_strengths', e.target.value)}
+              onChange={v => update('known_strengths', v)}
+              placeholder="e.g. Strong viral loop through team invites"
             />
           </div>
-          <div>
-            <FieldLabel label="Known Risks" hint="What concerns do you already have?" />
-            <textarea
-              rows={2}
-              className={inputClass}
-              placeholder="e.g. Crowded market, unclear monetization path, requires behavior change"
-              value={form.known_risks}
-              onChange={e => update('known_risks', e.target.value)}
-            />
-          </div>
-        </CollapsibleSection>
 
-        {/* ---- Section 5: Simulation Controls (collapsible) ---- */}
-        <CollapsibleSection
-          number={5}
-          title="Simulation Controls"
-          subtitle="tune the simulation parameters"
-          defaultOpen={true}
-        >
           <div>
-            <div className="flex justify-between items-baseline mb-1">
+            <FieldLabel label="Major Risks" hint="Press Enter to add each risk" />
+            <TagInput
+              value={form.known_risks}
+              onChange={v => update('known_risks', v)}
+              placeholder="e.g. Crowded market, unclear monetization"
+            />
+          </div>
+        </SectionPanel>
+
+        {/* ---- Section 5: Simulation Controls ---- */}
+        <SectionPanel number={5} title="Controls" subtitle="Tune the simulation parameters" icon="tune">
+          <div>
+            <div className="flex justify-between items-baseline mb-2">
               <FieldLabel label="Simulation Rounds" />
-              <span className="text-xs text-indigo-600 font-medium">
+              <span className="text-xs font-semibold text-primary">
                 {form.num_ticks} rounds &middot; {nearestLabel(form.num_ticks, ROUNDS_LABELS)}
               </span>
             </div>
             <input
               type="range"
               min={3} max={20} step={1}
-              className="w-full accent-indigo-600"
+              className="w-full accent-primary h-2 rounded-full"
               value={form.num_ticks}
               onChange={e => update('num_ticks', parseInt(e.target.value))}
             />
-            <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+            <div className="flex justify-between text-[10px] text-outline mt-1">
               <span>3 (quick)</span>
               <span>20 (exhaustive)</span>
             </div>
           </div>
 
           <div>
-            <div className="flex justify-between items-baseline mb-1">
+            <div className="flex justify-between items-baseline mb-2">
               <FieldLabel label="Population Size" />
-              <span className="text-xs text-indigo-600 font-medium">
+              <span className="text-xs font-semibold text-primary">
                 {form.population_size} NPCs &middot; {nearestLabel(form.population_size, POP_LABELS)}
               </span>
             </div>
             <input
               type="range"
               min={10} max={50} step={5}
-              className="w-full accent-indigo-600"
+              className="w-full accent-primary h-2 rounded-full"
               value={form.population_size}
               onChange={e => update('population_size', parseInt(e.target.value))}
             />
-            <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+            <div className="flex justify-between text-[10px] text-outline mt-1">
               <span>10 (focus group)</span>
               <span>50 (full population)</span>
             </div>
           </div>
 
           <div>
-            <div className="flex justify-between items-baseline mb-1">
+            <div className="flex justify-between items-baseline mb-2">
               <FieldLabel label="Initial Exposure" />
-              <span className="text-xs text-indigo-600 font-medium">
+              <span className="text-xs font-semibold text-primary">
                 {form.seed_count} {form.seed_count === 1 ? 'person' : 'people'} hear about it first
               </span>
             </div>
             <input
               type="range"
               min={1} max={Math.min(15, form.population_size)} step={1}
-              className="w-full accent-indigo-600"
+              className="w-full accent-primary h-2 rounded-full"
               value={form.seed_count}
               onChange={e => update('seed_count', parseInt(e.target.value))}
             />
-            <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+            <div className="flex justify-between text-[10px] text-outline mt-1">
               <span>1 (organic)</span>
               <span>{Math.min(15, form.population_size)} (broad launch)</span>
             </div>
           </div>
-
-          <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-500">
-            Estimated cost: ~${(form.num_ticks * form.population_size * 0.0001 + 0.02).toFixed(2)} &middot;
-            Duration: ~{Math.ceil(form.num_ticks * form.population_size * 0.12)}&ndash;{Math.ceil(form.num_ticks * form.population_size * 0.2)}s
-          </div>
-        </CollapsibleSection>
+        </SectionPanel>
 
         {/* ---- Variant Name (only for variants) ---- */}
         {variantOf && (
-          <div>
-            <FieldLabel label="What are you testing?" hint="optional label for this variant" />
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="e.g. Lower price, Different audience, Simpler description"
-              maxLength={200}
-              value={variantName}
-              onChange={e => setVariantName(e.target.value)}
-            />
+          <SectionPanel number={6} title="Variant Label" subtitle="What are you testing with this variant?" icon="science">
+            <div>
+              <FieldLabel label="Variant Name" hint="optional label for this variant" />
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="e.g. Lower price, Different audience, Simpler description"
+                maxLength={200}
+                value={variantName}
+                onChange={e => setVariantName(e.target.value)}
+              />
+            </div>
+          </SectionPanel>
+        )}
+
+        {/* ---- Error ---- */}
+        {error && (
+          <div className="glass-panel rounded-2xl border border-error/20 px-5 py-3 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-error">error</span>
+            <span className="text-sm text-error">{error}</span>
           </div>
         )}
+      </form>
 
-        {/* ---- Errors ---- */}
-        {error && (
-          <div className="bg-red-50 text-red-700 text-sm rounded-lg p-3">{error}</div>
-        )}
+      {/* ---- Bottom Action Bar ---- */}
+      <div className="fixed bottom-0 left-0 right-0 z-50">
+        <div className="glass-panel border-t border-outline-variant/30">
+          <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[16px] text-outline">payments</span>
+                <span className="text-xs text-on-surface-variant">
+                  Est. cost: <span className="font-semibold text-on-surface">${estimatedCost}</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[16px] text-outline">schedule</span>
+                <span className="text-xs text-on-surface-variant">
+                  Duration: <span className="font-semibold text-on-surface">{durationMin}&ndash;{durationMax}s</span>
+                </span>
+              </div>
+            </div>
 
-        {/* ---- Submit ---- */}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {loading
-            ? 'Launching Simulation...'
-            : variantOf ? 'Launch Variant Simulation' : 'Launch Simulation'}
-        </button>
+            <div className="flex items-center gap-3">
+              <Link
+                to="/dashboard"
+                className="text-sm font-semibold text-on-surface-variant hover:text-on-surface px-4 py-2.5 rounded-xl border border-outline-variant/30 hover:border-outline-variant/50 transition-all"
+              >
+                Cancel
+              </Link>
+              <button
+                type="submit"
+                form={undefined}
+                onClick={handleSubmit as unknown as React.MouseEventHandler}
+                disabled={loading || !form.title || !form.description}
+                className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-container text-on-primary px-6 py-2.5 rounded-xl text-sm font-semibold shadow-xl shadow-primary/20 hover:scale-[0.98] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    Launching...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">rocket_launch</span>
+                    {variantOf ? 'Launch Variant' : 'Run Simulation'}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        {loading && (
-          <p className="text-sm text-gray-500 text-center">
+      {loading && (
+        <div className="text-center mt-4">
+          <p className="text-xs text-on-surface-variant">
             This typically takes 1-3 minutes depending on population size.
           </p>
-        )}
-      </form>
+        </div>
+      )}
     </div>
   )
 }

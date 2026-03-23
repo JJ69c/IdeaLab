@@ -36,6 +36,12 @@ Thumbs.db
 .coverage
 htmlcov/
 
+# Build artifacts
+*.tsbuildinfo
+
+# Process documentation (internal evaluations, reports)
+process_doc/
+
 # Confidential docs
 docs/商业计划书.md
 docs/商业计划书.docx

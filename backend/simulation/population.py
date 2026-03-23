@@ -85,11 +85,14 @@ def parse_archetype_defs(raw: dict) -> dict[str, ArchetypeDef]:
 # ---------------------------------------------------------------------------
 
 def _sample_trait(lo: float, hi: float, rng: random.Random) -> float:
-    """Sample a trait value with slight concentration toward the center of range."""
-    # Triangular distribution: mode at midpoint, bounded by [lo, hi].
-    # This avoids NPCs clustering at the extremes of their archetype range.
-    mid = (lo + hi) / 2.0
-    return round(rng.triangular(lo, hi, mid), 3)
+    """Sample a trait value uniformly within the archetype range.
+
+    Uniform distribution (not triangular) gives better within-archetype
+    diversity.  Trait bounds are already widened for secondary traits and
+    kept narrow for signature traits, so uniform sampling respects
+    archetype identity while producing meaningful individual variation.
+    """
+    return round(rng.uniform(lo, hi), 3)
 
 
 def generate_npc(

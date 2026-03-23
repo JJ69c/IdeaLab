@@ -14,13 +14,13 @@
       "influence_susceptibility": "low_marketing, high_trusted_peer, high_evidence",
       "spread_likelihood": "low_volume_high_impact",
       "traits": {
-        "openness":          {"min": 0.20, "max": 0.40},
+        "openness":          {"min": 0.10, "max": 0.50},
         "skepticism":        {"min": 0.75, "max": 0.95},
-        "tech_savviness":    {"min": 0.50, "max": 0.80},
-        "price_sensitivity": {"min": 0.35, "max": 0.60},
-        "social_influence":  {"min": 0.55, "max": 0.80},
-        "conformity":        {"min": 0.10, "max": 0.30},
-        "novelty_seeking":   {"min": 0.05, "max": 0.25}
+        "tech_savviness":    {"min": 0.35, "max": 0.85},
+        "price_sensitivity": {"min": 0.20, "max": 0.70},
+        "social_influence":  {"min": 0.40, "max": 0.85},
+        "conformity":        {"min": 0.05, "max": 0.40},
+        "novelty_seeking":   {"min": 0.03, "max": 0.35}
       },
       "evaluation_weights": {
         "utility_clarity": 0.25,
@@ -32,7 +32,7 @@
         "trial_friction": -0.10,
         "market_saturation": -0.05
       },
-      "adoption_threshold": 0.72,
+      "adoption_threshold": 0.65,
       "resistance_floor": 0.40,
       "susceptibility_multiplier": 0.35,
       "count_range": [3, 5],
@@ -53,11 +53,11 @@
       "spread_likelihood": "very_high",
       "traits": {
         "openness":          {"min": 0.80, "max": 0.95},
-        "skepticism":        {"min": 0.05, "max": 0.25},
-        "tech_savviness":    {"min": 0.65, "max": 0.90},
-        "price_sensitivity": {"min": 0.10, "max": 0.30},
-        "social_influence":  {"min": 0.70, "max": 0.90},
-        "conformity":        {"min": 0.15, "max": 0.35},
+        "skepticism":        {"min": 0.03, "max": 0.35},
+        "tech_savviness":    {"min": 0.50, "max": 0.92},
+        "price_sensitivity": {"min": 0.05, "max": 0.45},
+        "social_influence":  {"min": 0.55, "max": 0.92},
+        "conformity":        {"min": 0.08, "max": 0.45},
         "novelty_seeking":   {"min": 0.85, "max": 0.98}
       },
       "evaluation_weights": {
@@ -91,13 +91,13 @@
       "influence_susceptibility": "very_high_price, moderate_utility, low_novelty",
       "spread_likelihood": "moderate_if_cheap",
       "traits": {
-        "openness":          {"min": 0.35, "max": 0.55},
-        "skepticism":        {"min": 0.45, "max": 0.70},
-        "tech_savviness":    {"min": 0.40, "max": 0.70},
+        "openness":          {"min": 0.20, "max": 0.65},
+        "skepticism":        {"min": 0.35, "max": 0.75},
+        "tech_savviness":    {"min": 0.25, "max": 0.80},
         "price_sensitivity": {"min": 0.80, "max": 0.95},
-        "social_influence":  {"min": 0.25, "max": 0.45},
-        "conformity":        {"min": 0.45, "max": 0.65},
-        "novelty_seeking":   {"min": 0.15, "max": 0.40}
+        "social_influence":  {"min": 0.15, "max": 0.55},
+        "conformity":        {"min": 0.35, "max": 0.75},
+        "novelty_seeking":   {"min": 0.08, "max": 0.50}
       },
       "evaluation_weights": {
         "utility_clarity": 0.20,
@@ -109,7 +109,7 @@
         "trust_barrier": -0.10,
         "market_saturation": -0.10
       },
-      "adoption_threshold": 0.62,
+      "adoption_threshold": 0.58,
       "resistance_floor": 0.0,
       "susceptibility_multiplier": 0.60,
       "count_range": [4, 6],
@@ -129,13 +129,13 @@
       "influence_susceptibility": "high_evidence, moderate_trusted_peer, low_hype",
       "spread_likelihood": "moderate_within_health_community",
       "traits": {
-        "openness":          {"min": 0.30, "max": 0.50},
+        "openness":          {"min": 0.20, "max": 0.60},
         "skepticism":        {"min": 0.60, "max": 0.85},
-        "tech_savviness":    {"min": 0.30, "max": 0.55},
-        "price_sensitivity": {"min": 0.30, "max": 0.55},
-        "social_influence":  {"min": 0.35, "max": 0.60},
-        "conformity":        {"min": 0.35, "max": 0.60},
-        "novelty_seeking":   {"min": 0.10, "max": 0.35}
+        "tech_savviness":    {"min": 0.20, "max": 0.65},
+        "price_sensitivity": {"min": 0.20, "max": 0.65},
+        "social_influence":  {"min": 0.25, "max": 0.70},
+        "conformity":        {"min": 0.25, "max": 0.65},
+        "novelty_seeking":   {"min": 0.05, "max": 0.45}
       },
       "evaluation_weights": {
         "utility_clarity": 0.20,
@@ -147,7 +147,7 @@
         "trial_friction": -0.10,
         "market_saturation": 0.00
       },
-      "adoption_threshold": 0.72,
+      "adoption_threshold": 0.70,
       "resistance_floor": 0.40,
       "susceptibility_multiplier": 0.45,
       "count_range": [3, 5],
@@ -168,12 +168,12 @@
       "spread_likelihood": "high_if_aspirational",
       "traits": {
         "openness":          {"min": 0.65, "max": 0.85},
-        "skepticism":        {"min": 0.10, "max": 0.30},
-        "tech_savviness":    {"min": 0.45, "max": 0.70},
+        "skepticism":        {"min": 0.05, "max": 0.40},
+        "tech_savviness":    {"min": 0.30, "max": 0.80},
         "price_sensitivity": {"min": 0.05, "max": 0.25},
-        "social_influence":  {"min": 0.65, "max": 0.85},
-        "conformity":        {"min": 0.25, "max": 0.50},
-        "novelty_seeking":   {"min": 0.60, "max": 0.80}
+        "social_influence":  {"min": 0.50, "max": 0.90},
+        "conformity":        {"min": 0.15, "max": 0.55},
+        "novelty_seeking":   {"min": 0.45, "max": 0.85}
       },
       "evaluation_weights": {
         "identity_fit": 0.30,
@@ -205,13 +205,13 @@
       "influence_susceptibility": "very_high_peer, low_novelty, moderate_price",
       "spread_likelihood": "high_after_critical_mass",
       "traits": {
-        "openness":          {"min": 0.35, "max": 0.55},
-        "skepticism":        {"min": 0.25, "max": 0.45},
-        "tech_savviness":    {"min": 0.30, "max": 0.55},
-        "price_sensitivity": {"min": 0.40, "max": 0.65},
-        "social_influence":  {"min": 0.15, "max": 0.35},
+        "openness":          {"min": 0.20, "max": 0.65},
+        "skepticism":        {"min": 0.15, "max": 0.55},
+        "tech_savviness":    {"min": 0.20, "max": 0.65},
+        "price_sensitivity": {"min": 0.25, "max": 0.75},
+        "social_influence":  {"min": 0.10, "max": 0.45},
         "conformity":        {"min": 0.75, "max": 0.95},
-        "novelty_seeking":   {"min": 0.10, "max": 0.30}
+        "novelty_seeking":   {"min": 0.05, "max": 0.40}
       },
       "evaluation_weights": {
         "market_saturation": 0.20,
@@ -243,13 +243,13 @@
       "influence_susceptibility": "high_convenience, moderate_peer, low_novelty",
       "spread_likelihood": "moderate_pragmatic",
       "traits": {
-        "openness":          {"min": 0.40, "max": 0.60},
-        "skepticism":        {"min": 0.30, "max": 0.50},
+        "openness":          {"min": 0.25, "max": 0.70},
+        "skepticism":        {"min": 0.20, "max": 0.60},
         "tech_savviness":    {"min": 0.55, "max": 0.80},
-        "price_sensitivity": {"min": 0.40, "max": 0.65},
-        "social_influence":  {"min": 0.30, "max": 0.50},
-        "conformity":        {"min": 0.45, "max": 0.65},
-        "novelty_seeking":   {"min": 0.25, "max": 0.50}
+        "price_sensitivity": {"min": 0.25, "max": 0.75},
+        "social_influence":  {"min": 0.20, "max": 0.60},
+        "conformity":        {"min": 0.30, "max": 0.70},
+        "novelty_seeking":   {"min": 0.15, "max": 0.60}
       },
       "evaluation_weights": {
         "utility_clarity": 0.25,
@@ -281,13 +281,13 @@
       "influence_susceptibility": "high_mission, moderate_trusted_peer, low_hype, low_price",
       "spread_likelihood": "moderate_within_values_community",
       "traits": {
-        "openness":          {"min": 0.55, "max": 0.75},
-        "skepticism":        {"min": 0.55, "max": 0.80},
-        "tech_savviness":    {"min": 0.30, "max": 0.55},
-        "price_sensitivity": {"min": 0.20, "max": 0.45},
-        "social_influence":  {"min": 0.40, "max": 0.60},
+        "openness":          {"min": 0.40, "max": 0.80},
+        "skepticism":        {"min": 0.45, "max": 0.85},
+        "tech_savviness":    {"min": 0.20, "max": 0.65},
+        "price_sensitivity": {"min": 0.10, "max": 0.55},
+        "social_influence":  {"min": 0.30, "max": 0.70},
         "conformity":        {"min": 0.10, "max": 0.30},
-        "novelty_seeking":   {"min": 0.25, "max": 0.50}
+        "novelty_seeking":   {"min": 0.15, "max": 0.55}
       },
       "evaluation_weights": {
         "identity_fit": 0.35,

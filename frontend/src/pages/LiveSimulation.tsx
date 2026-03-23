@@ -20,7 +20,7 @@ export default function LiveSimulation() {
 
   const handleSelectNpc = useCallback((npcId: string | null) => {
     setSelectedNpcId(npcId)
-    setHighlightedEdge(null) // Clear edge highlight when switching NPCs
+    setHighlightedEdge(null)
   }, [])
 
   const handleClosePanel = useCallback(() => {
@@ -29,10 +29,20 @@ export default function LiveSimulation() {
   }, [])
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-gray-50">
+    <div className="fixed inset-0 flex flex-col bg-background font-inter">
+      {/* Background glow accents */}
+      <div className="fixed top-[-10%] right-[-5%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] -z-10 pointer-events-none" />
+      <div className="fixed bottom-[-10%] left-[20%] w-[30%] h-[30%] bg-secondary-container/20 rounded-full blur-[100px] -z-10 pointer-events-none" />
+
       {/* Top bar */}
-      <div className="flex items-center gap-4 bg-white border-b px-4 py-2">
-        <Link to="/dashboard" className="text-indigo-600 text-sm font-medium">&larr; Dashboard</Link>
+      <div className="flex items-center gap-4 glass-panel border-b border-outline-variant/30 px-5 py-2.5 z-10">
+        <Link
+          to="/dashboard"
+          className="flex items-center gap-1.5 text-primary text-sm font-medium hover:text-primary-container transition-colors"
+        >
+          <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+          Dashboard
+        </Link>
         <div className="flex-1">
           <TickProgress
             currentTick={state.currentTick}
@@ -46,8 +56,9 @@ export default function LiveSimulation() {
         {state.isComplete && (
           <Link
             to={`/report/${id}`}
-            className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700"
+            className="flex items-center gap-1.5 text-xs bg-gradient-to-r from-primary to-primary-container text-on-primary px-4 py-2 rounded-xl font-semibold shadow-lg shadow-primary/20 hover:scale-[0.98] active:scale-95 transition-transform"
           >
+            <span className="material-symbols-outlined text-[16px]">analytics</span>
             View Full Report
           </Link>
         )}
@@ -73,22 +84,23 @@ export default function LiveSimulation() {
             onSelectNpc={handleSelectNpc}
           />
           {/* Legend */}
-          <div className="absolute bottom-3 right-3 flex flex-wrap gap-2 bg-white/80 rounded-lg px-3 py-2 backdrop-blur-sm">
+          <div className="absolute bottom-3 right-3 flex flex-wrap gap-2.5 glass-panel rounded-2xl px-4 py-2.5 border border-white/40 shadow-sm">
             {(Object.entries(STANCE_COLORS) as [Stance, string][])
               .filter(([s]) => s !== 'aware')
               .map(([stance, color]) => (
-                <div key={stance} className="flex items-center gap-1 text-xs text-gray-500">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                  {stance.replace(/_/g, ' ')}
+                <div key={stance} className="flex items-center gap-1.5 text-xs text-on-surface-variant">
+                  <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: color }} />
+                  <span className="capitalize">{stance.replace(/_/g, ' ')}</span>
                 </div>
               ))}
           </div>
         </div>
 
         {/* Event feed sidebar */}
-        <div className="w-72 border-l border-gray-200 bg-white flex flex-col">
-          <div className="px-3 py-2 border-b border-gray-100 text-xs font-medium text-gray-400 uppercase">
-            Event Feed
+        <div className="w-72 glass-panel-solid border-l border-outline-variant/30 flex flex-col">
+          <div className="px-4 py-3 border-b border-outline-variant/20 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[16px] text-primary">rss_feed</span>
+            <span className="text-xs font-semibold text-on-surface-variant uppercase tracking-widest">Event Feed</span>
           </div>
           <div className="flex-1 min-h-0">
             <EventFeed events={state.events} />
@@ -99,7 +111,7 @@ export default function LiveSimulation() {
       {/* Bottom metrics bar */}
       <MetricsBar metrics={state.metrics} previousMetrics={state.previousMetrics} />
 
-      {/* NPC detail panel (slide-in) — key resets internal state on NPC change */}
+      {/* NPC detail panel (slide-in) */}
       {selectedNpc && (
         <NpcDetailPanel
           key={selectedNpc.id}

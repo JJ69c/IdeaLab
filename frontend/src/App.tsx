@@ -17,11 +17,11 @@ export default function App() {
 
       {/* Standard pages with nav */}
       <Route path="*" element={
-        <div className="min-h-screen">
-          <nav className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-8">
-            <Link to="/" className="text-xl font-bold text-indigo-600">IdeaLab</Link>
-            <Link to="/dashboard" className="text-sm text-gray-600 hover:text-gray-900">Dashboard</Link>
-            <Link to="/inject" className="text-sm text-gray-600 hover:text-gray-900">New Simulation</Link>
+        <div className="min-h-screen bg-background">
+          <nav className="glass-panel border-b border-outline-variant/30 px-6 py-3 flex items-center gap-8">
+            <Link to="/" className="text-xl font-bold text-primary">IdeaLab</Link>
+            <Link to="/dashboard" className="text-sm text-on-surface-variant hover:text-on-surface transition-colors">Dashboard</Link>
+            <Link to="/inject" className="text-sm text-on-surface-variant hover:text-on-surface transition-colors">New Simulation</Link>
           </nav>
           <main className="max-w-6xl mx-auto px-6 py-8">
             <Routes>

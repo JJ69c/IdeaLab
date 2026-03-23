@@ -10,7 +10,9 @@ from backend.config import settings
 from backend.llm.client import llm_client
 from backend.simulation.convergence import ConvergenceTracker
 from backend.simulation.npc import Npc
+from backend.simulation.adoption import compute_world_adoptions
 from backend.simulation.asset_signals import AssetSignals, compute_asset_adjustment
+from backend.simulation.competition import classify_alternatives, compute_competition_adjustment
 from backend.simulation.evaluation import (
     compute_archetype_baseline,
     compute_individual_delta,
@@ -19,6 +21,7 @@ from backend.simulation.evaluation import (
 from backend.simulation.product_profile import build_product_profile
 from backend.simulation.propagation import (
     calculate_peer_influence,
+    compute_concern_influence,
     compute_discussion_weight,
     compute_spreads,
     select_discussion_pairs,
@@ -32,6 +35,12 @@ logger = logging.getLogger(__name__)
 # Type alias for the event callback
 EventCallback = Callable[[dict], None]
 _noop: EventCallback = lambda e: None
+
+# Maximum interest uplift above deterministic baseline from discussions.
+# Prevents discussion cascades from overriding product quality signals.
+# A product with baseline 0.25 cannot exceed 0.55 via discussions alone.
+# Set to 0 to disable the cap.
+DISCUSSION_UPLIFT_CAP = 0.40
 
 
 def create_world(
@@ -65,13 +74,24 @@ def create_world(
     )
     world.npc_archetypes = npc_archetypes
 
+    # Classify alternatives into structured competition context
+    competition_context = None
+    if idea.existing_alternatives.strip():
+        competition_context = classify_alternatives(
+            idea.existing_alternatives, idea_category=idea.category,
+        )
+    world.competition_context = competition_context
+
     # Build the normalized product profile from structured idea fields
-    world.product_profile = build_product_profile(idea, asset_signals=asset_signals)
+    world.product_profile = build_product_profile(
+        idea, asset_signals=asset_signals, competition_context=competition_context,
+    )
     world.asset_signals = asset_signals
     logger.info(
-        "Created world with %d NPCs, %d ticks, preset=%s, profile=%s, assets=%s",
+        "Created world with %d NPCs, %d ticks, preset=%s, profile=%s, assets=%s, competition=%s",
         len(world.npcs), config.num_ticks, preset, world.product_profile.to_dict(),
         "yes" if asset_signals else "none",
+        "yes" if competition_context else "none",
     )
     return world
 
@@ -108,6 +128,7 @@ def run_simulation(
             "config": {"num_ticks": config.num_ticks, "population_size": len(world.npcs)},
             "product_profile": world.product_profile.to_dict(),
             "asset_signals": world.asset_signals.to_dict() if world.asset_signals else None,
+            "competition_context": world.competition_context.to_dict() if world.competition_context else None,
             "npc_archetypes": world.npc_archetypes,
         },
     })
@@ -160,33 +181,63 @@ def _build_edge_list(world: WorldState) -> list[dict]:
     return edges
 
 
-def _stratified_seed_selection(npcs: list[Npc], count: int) -> list[Npc]:
-    """Select seed NPCs with stratification by novelty_seeking.
+def _stratified_seed_selection(
+    npcs: list[Npc],
+    count: int,
+    npc_archetypes: dict[str, str] | None = None,
+) -> list[Npc]:
+    """Select seed NPCs with archetype-stratified sampling.
 
-    Ensures at least 1 NPC from the top quartile (high novelty_seeking)
-    and 1 from the bottom quartile (low novelty_seeking) when count >= 3.
-    Remaining slots are filled randomly from the rest of the population.
-    This prevents all-Enthusiast or all-Skeptic seed groups.
+    When *npc_archetypes* is provided (npc_id → archetype_id), the algorithm
+    guarantees at least one NPC from as many distinct archetypes as possible
+    (up to *count*).  Any remaining slots are filled randomly from the rest
+    of the population.
+
+    Fallback (no archetype map or count <= 2): pure random sample.
     """
     if count <= 2 or len(npcs) < 4:
-        return random.sample(npcs, count)
+        return random.sample(npcs, min(count, len(npcs)))
 
+    # --- Archetype-stratified path ---
+    if npc_archetypes:
+        # Group NPCs by archetype
+        buckets: dict[str, list[Npc]] = {}
+        for npc in npcs:
+            arch = npc_archetypes.get(npc.id, "unknown")
+            buckets.setdefault(arch, []).append(npc)
+
+        seeds: list[Npc] = []
+        seed_ids: set[str] = set()
+
+        # Phase 1: one random NPC from each archetype (shuffled order)
+        arch_keys = list(buckets.keys())
+        random.shuffle(arch_keys)
+        for arch in arch_keys:
+            if len(seeds) >= count:
+                break
+            pick = random.choice(buckets[arch])
+            seeds.append(pick)
+            seed_ids.add(pick.id)
+
+        # Phase 2: fill remaining slots randomly from non-seeds
+        fill_count = count - len(seeds)
+        if fill_count > 0:
+            remaining = [n for n in npcs if n.id not in seed_ids]
+            if remaining:
+                seeds.extend(random.sample(remaining, min(fill_count, len(remaining))))
+
+        return seeds
+
+    # --- Legacy novelty_seeking fallback ---
     sorted_by_ns = sorted(npcs, key=lambda n: n.personality.novelty_seeking)
     q_size = max(1, len(sorted_by_ns) // 4)
     bottom_q = sorted_by_ns[:q_size]
     top_q = sorted_by_ns[-q_size:]
 
-    seeds: list[Npc] = []
+    seeds = []
+    seeds.append(random.choice(top_q))
+    seeds.append(random.choice(bottom_q))
 
-    # Guarantee 1 from top quartile (early adopter type)
-    top_pick = random.choice(top_q)
-    seeds.append(top_pick)
-
-    # Guarantee 1 from bottom quartile (conservative type)
-    bottom_pick = random.choice(bottom_q)
-    seeds.append(bottom_pick)
-
-    # Fill remaining from the rest of the population
     remaining = [n for n in npcs if n not in seeds]
     fill_count = count - len(seeds)
     if fill_count > 0 and remaining:
@@ -202,7 +253,9 @@ def _run_tick(world: WorldState, tick: int, emit: EventCallback):
     if tick == 1:
         all_npcs = list(world.npcs.values())
         seed_count = min(world.config.seed_count, len(all_npcs))
-        seeds = _stratified_seed_selection(all_npcs, seed_count)
+        seeds = _stratified_seed_selection(
+            all_npcs, seed_count, npc_archetypes=world.npc_archetypes
+        )
         for npc in seeds:
             npc.state.become_aware(tick, source="direct_exposure")
             world.log_event(tick, npc.id, "became_aware", {"source": "direct_exposure"})
@@ -259,6 +312,35 @@ def _run_tick(world: WorldState, tick: int, emit: EventCallback):
                 },
             })
 
+    # --- Phase 4b: Concern propagation (negative influence) ---
+    concern_deltas = compute_concern_influence(world)
+    for target_id, delta in concern_deltas:
+        target_npc = world.npcs.get(target_id)
+        if target_npc:
+            old_interest = target_npc.state.interest_score
+            new_stance = target_npc.state.apply_influence(delta, tick)
+            emit({
+                "type": "concern_applied",
+                "tick": tick,
+                "data": {
+                    "npc_id": target_npc.id, "name": target_npc.name,
+                    "delta": round(delta, 4),
+                    "old_interest": round(old_interest, 3),
+                    "new_interest": round(target_npc.state.interest_score, 3),
+                },
+            })
+            if new_stance:
+                emit({
+                    "type": "npc_state_change",
+                    "tick": tick,
+                    "data": {
+                        "npc_id": target_npc.id, "name": target_npc.name,
+                        "new_stance": new_stance,
+                        "interest_score": round(target_npc.state.interest_score, 3),
+                        "reason": "concern_influence",
+                    },
+                })
+
     # --- Re-derive would_recommend before spread (interest may have changed) ---
     for npc in world.aware_npcs:
         npc.state.update_would_recommend()
@@ -280,6 +362,9 @@ def _run_tick(world: WorldState, tick: int, emit: EventCallback):
         })
         world.log_event(tick, spread.source_id, "will_spread", {"target": spread.target_id})
 
+    # --- Phase 6: Adoption (deterministic, per-NPC) ---
+    compute_world_adoptions(world)
+
     metrics = world.compute_metrics()
     logger.info(
         "Tick %d: aware=%d, interested=%d, awareness=%.0f%%",
@@ -295,12 +380,14 @@ def _batch_react(world: WorldState, npcs: list[Npc], tick: int, emit: EventCallb
         archetype_baseline  (0.15-0.85)  from ProductProfile x archetype weights
       + individual_delta    (+-0.10)     from trait deviation x ProductProfile
       + asset_delta         (+-0.08)     from AssetSignals x traits
+      + competition_delta   (+-0.08)     from CompetitionContext x personality
       + llm_hint            (+-0.10)     LLM qualitative adjustment
       = final interest_score (0-1)       clamped
     """
     batch_size = settings.reaction_batch_size
     idea_dict = world.idea.to_dict()
     asset_signals_dict = world.asset_signals.to_dict() if getattr(world, "asset_signals", None) else None
+    competition_ctx = getattr(world, "competition_context", None)
     profile = getattr(world, "product_profile", None)
 
     for i in range(0, len(npcs), batch_size):
@@ -308,7 +395,11 @@ def _batch_react(world: WorldState, npcs: list[Npc], tick: int, emit: EventCallb
         profiles = [npc.to_profile_dict() for npc in batch]
 
         try:
-            reactions = llm_client.batch_react(profiles, idea_dict, asset_signals_dict=asset_signals_dict)
+            reactions = llm_client.batch_react(
+                profiles, idea_dict,
+                asset_signals_dict=asset_signals_dict,
+                competition_context_dict=competition_ctx.to_dict() if competition_ctx else None,
+            )
         except Exception:
             logger.exception("LLM batch_react failed for batch starting at %d", i)
             reactions = [
@@ -325,7 +416,8 @@ def _batch_react(world: WorldState, npcs: list[Npc], tick: int, emit: EventCallb
             # --- Deterministic baseline from archetype weights x ProductProfile ---
             archetype_id = world.npc_archetypes.get(npc.id)
             eval_def = get_archetype_evaluation(archetype_id)
-            baseline = compute_archetype_baseline(profile, eval_def) if profile else 0.5
+            idea_category = getattr(world.idea, "category", None)
+            baseline = compute_archetype_baseline(profile, eval_def, category=idea_category) if profile else 0.5
 
             # --- Individual trait variation (+-0.10) ---
             ind_delta = compute_individual_delta(npc.personality, profile) if profile else 0.0
@@ -336,6 +428,14 @@ def _batch_react(world: WorldState, npcs: list[Npc], tick: int, emit: EventCallb
             if signals is not None:
                 personality_dict = npc.to_profile_dict().get("personality", {})
                 asset_delta = compute_asset_adjustment(signals, personality_dict)
+
+            # --- Competition context adjustment (+-0.08) ---
+            competition_delta = 0.0
+            if competition_ctx is not None:
+                personality_dict = npc.to_profile_dict().get("personality", {})
+                competition_delta = compute_competition_adjustment(
+                    competition_ctx, personality_dict, archetype_id=archetype_id,
+                )
 
             # --- LLM hint (bounded +-0.10) ---
             # The LLM now returns interest_adjustment instead of interest_score.
@@ -348,13 +448,13 @@ def _batch_react(world: WorldState, npcs: list[Npc], tick: int, emit: EventCallb
             llm_hint = max(-0.10, min(0.10, float(raw_hint)))
 
             # --- Compose final score ---
-            final_score = max(0.0, min(1.0, baseline + ind_delta + asset_delta + llm_hint))
+            final_score = max(0.0, min(1.0, baseline + ind_delta + asset_delta + competition_delta + llm_hint))
             reaction["interest_score"] = final_score
 
             logger.debug(
-                "NPC %s (%s): baseline=%.3f ind=%.3f asset=%.3f llm=%.3f → final=%.3f",
+                "NPC %s (%s): baseline=%.3f ind=%.3f asset=%.3f comp=%.3f llm=%.3f → final=%.3f",
                 npc.id, archetype_id or "?",
-                baseline, ind_delta, asset_delta, llm_hint, final_score,
+                baseline, ind_delta, asset_delta, competition_delta, llm_hint, final_score,
             )
 
             # Cache baseline on world for later use (influence resistance floor)
@@ -379,6 +479,7 @@ def _batch_react(world: WorldState, npcs: list[Npc], tick: int, emit: EventCallb
                     "baseline": round(baseline, 3),
                     "individual_delta": round(ind_delta, 3),
                     "asset_delta": round(asset_delta, 3),
+                    "competition_delta": round(competition_delta, 3),
                     "llm_hint": round(llm_hint, 3),
                 },
             })
@@ -449,6 +550,22 @@ def _run_discussion(
     )
     a_delta = round(raw_a_delta * a_weight, 4)
     b_delta = round(raw_b_delta * b_weight, 4)
+
+    # Cap positive discussion uplift so it cannot exceed baseline + DISCUSSION_UPLIFT_CAP.
+    # This prevents discussion cascades from overriding weak product fundamentals.
+    # Negative deltas are not capped — skepticism should flow freely.
+    if DISCUSSION_UPLIFT_CAP > 0:
+        baselines = getattr(world, "_npc_baselines", {})
+        a_baseline = baselines.get(npc_a.id, 0.5)
+        b_baseline = baselines.get(npc_b.id, 0.5)
+        if a_delta > 0:
+            a_ceiling = a_baseline + DISCUSSION_UPLIFT_CAP
+            a_room = max(0.0, a_ceiling - npc_a.state.interest_score)
+            a_delta = min(a_delta, a_room)
+        if b_delta > 0:
+            b_ceiling = b_baseline + DISCUSSION_UPLIFT_CAP
+            b_room = max(0.0, b_ceiling - npc_b.state.interest_score)
+            b_delta = min(b_delta, b_room)
 
     a_new_stance = npc_a.state.apply_discussion_outcome(a_delta, tick, npc_b.id)
     b_new_stance = npc_b.state.apply_discussion_outcome(b_delta, tick, npc_a.id)

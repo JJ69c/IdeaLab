@@ -7,6 +7,10 @@ modulate the base formulas:
 - price_friction reduces casual recommendations
 - trust_barrier increases the threshold for positive spread
 
+Includes both positive spread (recommendation) and negative concern propagation:
+- Positive spread: enthusiastic NPCs make unaware connections aware
+- Concern spread: skeptical/low-interest NPCs dampen interest of aware connections
+
 Stage 3 additions:
 - Archetype-aware susceptibility via susceptibility_multiplier
 - Exposure decay: diminishing returns over time (except Followers)
@@ -117,7 +121,8 @@ def calculate_peer_influence(npc: Npc, world: WorldState) -> float:
     eval_def = get_archetype_evaluation(archetype_id)
     if eval_def.resistance_floor > 0 and profile is not None:
         from backend.simulation.evaluation import compute_archetype_baseline
-        baseline = compute_archetype_baseline(profile, eval_def)
+        idea_category = getattr(world.idea, "category", None) if hasattr(world, "idea") else None
+        baseline = compute_archetype_baseline(profile, eval_def, category=idea_category)
         if baseline < eval_def.resistance_floor:
             raw_delta *= 0.15  # nearly immune
 
@@ -262,3 +267,89 @@ def compute_spreads(world: WorldState) -> list[SpreadEvent]:
                 unaware_ids.discard(conn_id)  # each NPC learns at most once per tick
 
     return spreads
+
+
+# ---------------------------------------------------------------------------
+# Negative concern propagation
+# ---------------------------------------------------------------------------
+
+# Threshold below which an NPC is "concerned enough" to voice negativity.
+# 0.45 allows indifferent-to-skeptical NPCs (not just opposed) to share concerns.
+CONCERN_INTEREST_THRESHOLD = 0.45
+
+# Minimum interest a target must have for concern to be worth sharing.
+# 0.25 catches mildly negative NPCs — they can still be dampened further.
+# Very low-interest targets (< 0.25) are already convinced it's bad.
+CONCERN_TARGET_MIN_INTEREST = 0.25
+
+# Base probability that a concerned NPC shares their negativity per connection.
+# Sharing negativity is easier than recommending — you don't have to convince,
+# just dampen enthusiasm. 3.0 yields ~10-15% probability per check at typical
+# concern_strength/influence/trust values.
+CONCERN_SHARE_BASE = 3.0
+
+# How much each concern event moves the target's interest.
+CONCERN_DELTA_MULTIPLIER = 0.12
+
+
+def compute_concern_influence(world: WorldState) -> list[tuple[str, float]]:
+    """Compute negative influence from skeptical/low-interest NPCs.
+
+    Unlike positive spread (which makes new people AWARE), concern propagation
+    dampens interest of ALREADY-AWARE connections. This models realistic
+    word-of-mouth: people share warnings, doubts, and negative impressions
+    with their social network.
+
+    Structural design (2026-03-23):
+    - Concern propagation does NOT require objections. Low interest alone is
+      sufficient — a disinterested or opposed NPC naturally dampens enthusiasm
+      through body language, dismissive comments, and social signaling, even
+      without articulated objections.
+    - NPCs WITH objections get a bonus to share probability (they have specific
+      talking points), but the absence of objections is not a gate.
+    - Credibility still matters: a skeptic's dismissal carries more weight
+      than a follower's indifference.
+    - Targets must be aware and above CONCERN_TARGET_MIN_INTEREST (no point
+      dampening someone who's already negative).
+
+    Returns:
+        List of (target_npc_id, negative_delta) tuples.
+    """
+    concern_deltas: dict[str, float] = {}
+
+    for npc in world.aware_npcs:
+        if npc.state.interest_score >= CONCERN_INTEREST_THRESHOLD:
+            continue
+
+        concern_strength = CONCERN_INTEREST_THRESHOLD - npc.state.interest_score
+
+        # Source credibility: a skeptic's warning carries more weight
+        archetype_id = getattr(npc, "archetype", None)
+        credibility = _SOURCE_CREDIBILITY.get(archetype_id or "", 1.0)
+
+        # NPCs with specific objections are more vocal (bonus to share prob)
+        has_objections = bool(npc.state.objections)
+        objection_bonus = 1.5 if has_objections else 1.0
+
+        for conn_id in npc.social_connections:
+            conn = world.npcs.get(conn_id)
+            if not conn or not conn.state.aware:
+                continue
+            if conn.state.interest_score < CONCERN_TARGET_MIN_INTEREST:
+                continue  # already low, no need to dampen further
+
+            trust = npc.trust_weights.get(conn_id, 0.5)
+
+            share_prob = (
+                concern_strength
+                * npc.personality.social_influence
+                * trust
+                * CONCERN_SHARE_BASE
+                * objection_bonus
+            )
+
+            if random.random() < share_prob:
+                delta = -(concern_strength * trust * credibility * CONCERN_DELTA_MULTIPLIER)
+                concern_deltas[conn_id] = concern_deltas.get(conn_id, 0.0) + delta
+
+    return list(concern_deltas.items())

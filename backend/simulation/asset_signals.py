@@ -105,10 +105,6 @@ def analyze_assets(
         if block:
             image_blocks.append(block)
 
-    if not image_blocks:
-        logger.info("No valid images to analyze")
-        return None
-
     # Build asset description text
     descriptions = []
     for i, meta in enumerate(asset_metadata):
@@ -118,6 +114,14 @@ def analyze_assets(
         if meta.get("note"):
             desc += f", note: {meta['note']}"
         descriptions.append(desc)
+
+    # URL-only assets (no images uploaded) get a text-only analysis.
+    # The LLM rates based on what the URL and description imply about
+    # the product, without actually seeing visuals.
+    has_urls = any(meta.get("url") for meta in asset_metadata)
+    if not image_blocks and not has_urls:
+        logger.info("No valid images or URLs to analyze")
+        return None
 
     result = llm_client.analyze_assets(
         image_blocks=image_blocks,

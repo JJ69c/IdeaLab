@@ -29,15 +29,15 @@ function formatEvent(e: SimEvent): string | null {
   }
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  npc_aware: 'text-blue-500',
-  npc_reaction: 'text-gray-600',
-  npc_state_change: 'text-indigo-600 font-medium',
-  discussion_start: 'text-purple-500',
-  discussion_end: 'text-purple-700',
-  npc_spread: 'text-green-600',
-  simulation_complete: 'text-emerald-700 font-bold',
-  error: 'text-red-600 font-medium',
+const TYPE_ICONS: Record<string, { icon: string; color: string }> = {
+  npc_aware: { icon: 'visibility', color: 'text-primary' },
+  npc_reaction: { icon: 'psychology', color: 'text-on-surface-variant' },
+  npc_state_change: { icon: 'swap_horiz', color: 'text-secondary font-medium' },
+  discussion_start: { icon: 'forum', color: 'text-tertiary' },
+  discussion_end: { icon: 'chat_bubble', color: 'text-tertiary' },
+  npc_spread: { icon: 'share', color: 'text-green-600' },
+  simulation_complete: { icon: 'check_circle', color: 'text-green-600 font-bold' },
+  error: { icon: 'error', color: 'text-error font-medium' },
 }
 
 export default function EventFeed({ events }: { events: SimEvent[] }) {
@@ -47,27 +47,26 @@ export default function EventFeed({ events }: { events: SimEvent[] }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [events.length])
 
-  let lastTick = 0
-
   return (
-    <div className="h-full overflow-y-auto text-xs space-y-0.5 pr-1">
+    <div className="h-full overflow-y-auto glass-scrollbar text-xs space-y-0.5 px-1">
       {events.map((e, i) => {
         const text = formatEvent(e)
         if (!text) {
-          // Tick separator
           if (e.type === 'tick_start') {
-            lastTick = e.tick
             return (
-              <div key={i} className="sticky top-0 bg-gray-50 border-b border-gray-200 py-1 px-1 text-gray-400 font-medium mt-2">
+              <div key={i} className="sticky top-0 bg-surface-container/90 backdrop-blur-sm border-b border-outline-variant/15 py-1.5 px-3 text-outline font-semibold mt-2 rounded-lg uppercase tracking-widest text-[10px]">
+                <span className="material-symbols-outlined text-[12px] mr-1 align-middle">schedule</span>
                 Round {e.tick}
               </div>
             )
           }
           return null
         }
+        const typeInfo = TYPE_ICONS[e.type]
         return (
-          <div key={i} className={`py-0.5 px-1 ${TYPE_COLORS[e.type] || 'text-gray-500'}`}>
-            {text}
+          <div key={i} className={`py-1 px-2 flex items-start gap-1.5 rounded-lg hover:bg-surface-container-low/50 transition-colors ${typeInfo?.color || 'text-on-surface-variant'}`}>
+            {typeInfo && <span className="material-symbols-outlined text-[12px] mt-0.5 flex-shrink-0">{typeInfo.icon}</span>}
+            <span>{text}</span>
           </div>
         )
       })}

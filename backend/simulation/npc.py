@@ -12,6 +12,11 @@ STANCES = [
     "curious", "interested", "willing_to_try", "willing_to_pay",
 ]
 
+# Interest score threshold for recommending the product to others.
+# 0.68 = solidly interested; low enough that strong products can spread
+# through discussions, high enough that mediocre products need real uplift.
+RECOMMEND_THRESHOLD = 0.68
+
 
 def derive_stance(interest_score: float, would_pay: bool, aware: bool) -> str:
     """Deterministically map interest score → stance label.
@@ -150,8 +155,9 @@ class NpcState:
 
         Removes the LLM gate on spread — NPCs who become more interested
         through discussions/influence can start recommending.
+        Uses module-level RECOMMEND_THRESHOLD (default 0.68).
         """
-        self.would_recommend = self.interest_score >= 0.65
+        self.would_recommend = self.interest_score >= RECOMMEND_THRESHOLD
 
     def _record_history(self, tick: int):
         self.history.append({
