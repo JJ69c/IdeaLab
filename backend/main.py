@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes.assets import router as assets_router
+from backend.api.routes.auth import router as auth_router
 from backend.api.routes.npcs import router as npcs_router
 from backend.api.routes.simulation import router as simulation_router
 from backend.api.schemas.responses import HealthResponse
@@ -40,6 +41,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(simulation_router)
 app.include_router(npcs_router)
 app.include_router(assets_router)

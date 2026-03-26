@@ -3,7 +3,9 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     anthropic_api_key: str = ""
-    database_url: str = "sqlite+aiosqlite:///./idealab.db"
+    # PostgreSQL (production): postgresql+asyncpg://user:pass@localhost:5432/idealab
+    # SQLite (dev fallback):   sqlite+aiosqlite:///./idealab.db
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/idealab"
 
     # LLM model choices
     reaction_model: str = "claude-haiku-4-5-20251001"
@@ -21,6 +23,11 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 5
     max_assets_per_simulation: int = 5
     asset_analysis_model: str = "claude-haiku-4-5-20251001"
+
+    # Auth
+    jwt_secret_key: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60 * 24  # 24 hours
 
     # API
     cors_origins: list[str] = ["http://localhost:5173"]

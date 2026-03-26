@@ -1,0 +1,549 @@
+{
+  "CONCERN_DELTA_MULTIPLIER": [
+    {
+      "value": 0.04,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0024,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.06,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0036,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.08,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0048,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.1,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.006,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.12,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0072,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.15,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.009,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.2,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.012,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.25,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.015,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.3,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0181,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    }
+  ],
+  "CONCERN_SHARE_BASE": [
+    {
+      "value": 1.0,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0231,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 1.5,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0347,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 2.0,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0463,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 2.5,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0579,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 3.0,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0694,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 3.5,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.081,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 4.0,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0926,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 5.0,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.1157,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 6.0,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.1389,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    }
+  ],
+  "EXPOSURE_DECAY_RATE": [
+    {
+      "value": 0.05,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.1,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.15,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.2,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.25,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.3,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.35,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.4,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.5,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    }
+  ],
+  "SATURATION_DAMPER_COEFF": [
+    {
+      "value": 0.1,
+      "avg_interest": 0.3744,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 49,
+        "skeptical": 2,
+        "indifferent": 17,
+        "interested": 4
+      }
+    },
+    {
+      "value": 0.15,
+      "avg_interest": 0.3633,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 49,
+        "skeptical": 2,
+        "indifferent": 18,
+        "interested": 3
+      }
+    },
+    {
+      "value": 0.2,
+      "avg_interest": 0.3522,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 45,
+        "indifferent": 23,
+        "skeptical": 2,
+        "interested": 2
+      }
+    },
+    {
+      "value": 0.25,
+      "avg_interest": 0.3411,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 43,
+        "indifferent": 25,
+        "skeptical": 2,
+        "interested": 2
+      }
+    },
+    {
+      "value": 0.3,
+      "avg_interest": 0.33,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "indifferent": 30,
+        "curious": 39,
+        "skeptical": 2,
+        "interested": 1
+      }
+    },
+    {
+      "value": 0.35,
+      "avg_interest": 0.3189,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "indifferent": 33,
+        "curious": 35,
+        "skeptical": 3,
+        "interested": 1
+      }
+    },
+    {
+      "value": 0.4,
+      "avg_interest": 0.3078,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "indifferent": 34,
+        "curious": 34,
+        "skeptical": 4
+      }
+    },
+    {
+      "value": 0.5,
+      "avg_interest": 0.2856,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "indifferent": 42,
+        "curious": 24,
+        "skeptical": 6
+      }
+    },
+    {
+      "value": 0.6,
+      "avg_interest": 0.2634,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "indifferent": 48,
+        "skeptical": 10,
+        "curious": 14
+      }
+    }
+  ],
+  "CONCERN_INTEREST_THRESHOLD": [
+    {
+      "value": 0.3,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.33,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.36,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.39,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.42,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.45,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.48,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.51,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    },
+    {
+      "value": 0.55,
+      "avg_interest": 0.3967,
+      "adoption_rate": 0.0,
+      "concern_delta": 0.0,
+      "stances": {
+        "curious": 50,
+        "skeptical": 2,
+        "indifferent": 12,
+        "interested": 8
+      }
+    }
+  ]
+}

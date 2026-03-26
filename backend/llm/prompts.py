@@ -54,6 +54,7 @@ and may shift either person's opinion slightly.
 Rules:
 - Keep the discussion to 3-4 exchanges max.
 - Each person speaks in character based on their profile.
+- If a person has heard concerns from others or had prior conversations, they should naturally reference those experiences — not mechanically list them, but let them color their perspective.
 - The outcome should reflect realistic social influence.
 - Output valid JSON only."""
 
@@ -64,11 +65,11 @@ Description: {idea_description}
 ## Person A
 {persona_a}
 Current stance: {stance_a} (interest: {interest_a})
-
+{memory_a}
 ## Person B
 {persona_b}
 Current stance: {stance_b} (interest: {interest_b})
-
+{memory_b}
 ## Their relationship
 Trust level: {trust_level} (0-1 scale)
 
@@ -391,6 +392,19 @@ def format_ask_npc_system(ctx: dict) -> str:
             f'"{d["key_point"]}" (your interest shifted {d["delta"]:+.0%})'
         )
 
+    # Build peer warnings summary
+    warning_lines = []
+    for w in ctx.get("peer_warnings", []):
+        theme = w.get("theme", "")
+        source = w.get("source_name", "someone")
+        content = w.get("content", "")
+        short = (content[:120] + "...") if len(content) > 120 else content
+        delta = w.get("delta", 0)
+        warning_lines.append(
+            f'  Round {w.get("tick", "?")}: {source} shared a {theme} concern: '
+            f'"{short}" (your interest dropped {abs(delta):.0%})'
+        )
+
     # Build objections list
     objection_lines = ""
     if state.get("objections"):
@@ -430,13 +444,63 @@ You are participating in a focus group discussion about a new product idea.
 ## YOUR DISCUSSIONS
 {chr(10).join(discussion_lines) if discussion_lines else '  No discussions recorded.'}
 
+## WHAT YOU'VE HEARD FROM OTHERS
+{chr(10).join(warning_lines) if warning_lines else '  No one has shared concerns with you.'}
+
 ## Rules
 1. Stay FULLY in character as {npc['name']}. Speak naturally in first person.
 2. Your answer MUST be consistent with your recorded state above. If your stance is "skeptical", be skeptical. If "interested", be enthusiastic.
-3. Reference your ACTUAL objections, reasoning, and discussion experiences — do not invent new ones.
+3. Reference your ACTUAL objections, reasoning, discussion experiences, and concerns you've heard from others — do not invent new ones.
 4. Keep your response to 2-3 sentences. Be concise and natural.
 5. If asked about something not covered by your recorded state, say you haven't thought about it yet rather than making something up.
 6. Use language appropriate for your communication style and personality."""
+
+
+def format_social_memory(
+    peer_warnings: list,
+    discussion_memories: list,
+    objection_themes: list[str] | None = None,
+) -> str:
+    """Format an NPC's social memory for injection into discussion/ask_npc prompts.
+
+    Accepts PeerWarning/DiscussionMemory dataclasses or plain dicts.
+    Returns an empty string if no memories exist.
+    """
+    sections: list[str] = []
+
+    if peer_warnings:
+        lines = []
+        for w in peer_warnings:
+            tick = w.tick if hasattr(w, "tick") else w.get("tick", "?")
+            source = w.source_name if hasattr(w, "source_name") else w.get("source_name", "someone")
+            theme = w.theme if hasattr(w, "theme") else w.get("theme", "")
+            content = w.content if hasattr(w, "content") else w.get("content", "")
+            delta = w.delta if hasattr(w, "delta") else w.get("delta", 0)
+            short = (content[:120] + "...") if len(content) > 120 else content
+            lines.append(
+                f'  Round {tick}: {source} raised a {theme} concern: '
+                f'"{short}" (lowered your interest by {abs(delta):.0%})'
+            )
+        sections.append("What you've heard from others:\n" + "\n".join(lines))
+
+    if discussion_memories:
+        lines = []
+        for d in discussion_memories:
+            tick = d.tick if hasattr(d, "tick") else d.get("tick", "?")
+            partner = d.partner_name if hasattr(d, "partner_name") else d.get("partner_name", "someone")
+            key_point = d.key_point if hasattr(d, "key_point") else d.get("key_point", "")
+            delta = d.my_delta if hasattr(d, "my_delta") else d.get("my_delta", 0)
+            direction = "raised" if delta > 0 else "lowered"
+            lines.append(
+                f'  Round {tick}: Talked with {partner} — '
+                f'"{key_point}" ({direction} your interest by {abs(delta):.0%})'
+            )
+        sections.append("Your past discussions:\n" + "\n".join(lines))
+
+    if objection_themes:
+        sections.append(f"Your main concerns: {', '.join(objection_themes)}")
+
+    return "\n".join(sections) + "\n" if sections else ""
 
 
 def format_persona_for_prompt(npc: dict) -> str:

@@ -23,7 +23,12 @@ from __future__ import annotations
 import random
 
 from backend.simulation.evaluation import get_archetype_evaluation
-from backend.simulation.npc import Npc
+from backend.simulation.npc import ConcernEvent, Npc
+from backend.simulation.resonance import (
+    classify_objection_theme,
+    get_primary_concern_theme,
+    get_resonance,
+)
 from backend.simulation.world import SpreadEvent, WorldState
 
 
@@ -61,7 +66,11 @@ def compute_peer_susceptibility(npc: Npc, world: WorldState) -> float:
     eval_def = get_archetype_evaluation(archetype_id)
     base *= eval_def.susceptibility_multiplier
 
-    # Exposure decay: diminishing returns over time
+    # Exposure decay: diminishing returns over time.
+    # Rate 0.25: at tick 4 → 50% influence, tick 10 → 29%, tick 20 → 17%.
+    # Calibrated (2026-03-25): 0.05–0.50 range tested; 0.25 balances early
+    # responsiveness with late-sim stability. Lower values make NPCs too
+    # susceptible throughout; higher values kill peer influence too fast.
     exposure = npc.state.exposure_count
     if archetype_id == "social_follower":
         # Social Followers get INCREASING returns (social proof accumulates)
@@ -108,7 +117,10 @@ def calculate_peer_influence(npc: Npc, world: WorldState) -> float:
     susceptibility = compute_peer_susceptibility(npc, world)
     raw_delta = (peer_avg - current) * susceptibility
 
-    # Product profile modulation: saturated markets → stronger priors
+    # Product profile modulation: saturated markets → stronger priors.
+    # Coefficient 0.30: at saturation=1.0 → 30% reduction in peer influence.
+    # Calibrated (2026-03-25): 0.10–0.60 range tested; 0.30 creates moderate
+    # dampening in crowded markets without killing social dynamics entirely.
     profile = getattr(world, "product_profile", None)
     if profile is not None:
         saturation_damper = 1.0 - profile.market_saturation * 0.30
@@ -275,6 +287,8 @@ def compute_spreads(world: WorldState) -> list[SpreadEvent]:
 
 # Threshold below which an NPC is "concerned enough" to voice negativity.
 # 0.45 allows indifferent-to-skeptical NPCs (not just opposed) to share concerns.
+# Sensitivity: lowering to 0.30 restricts concern sharing to strongly opposed only;
+# raising to 0.55 makes mildly curious NPCs share doubt too (too aggressive).
 CONCERN_INTEREST_THRESHOLD = 0.45
 
 # Minimum interest a target must have for concern to be worth sharing.
@@ -283,16 +297,22 @@ CONCERN_INTEREST_THRESHOLD = 0.45
 CONCERN_TARGET_MIN_INTEREST = 0.25
 
 # Base probability that a concerned NPC shares their negativity per connection.
-# Sharing negativity is easier than recommending — you don't have to convince,
-# just dampen enthusiasm. 3.0 yields ~10-15% probability per check at typical
-# concern_strength/influence/trust values.
+# Typical inputs: concern_strength ~0.15, influence ~0.5, trust ~0.5.
+# At 3.0: prob ≈ 0.15 * 0.5 * 0.5 * 3.0 = ~11% per connection per tick.
+# Calibrated via sensitivity sweep (2026-03-25): 1.0–6.0 range tested.
+# 3.0 produces ~10-15% share rate, matching real word-of-mouth frequency.
 CONCERN_SHARE_BASE = 3.0
 
 # How much each concern event moves the target's interest.
+# Per-event delta: 0.12 * concern_strength * trust * credibility * resonance.
+# Typical: 0.12 * 0.15 * 0.5 * 1.0 * 1.3 ≈ -0.012 per event.
+# With 3-4 concern events/tick, ~0.05 cumulative shift/tick — meaningful but
+# not overwhelming. Compounds across ticks for realistic gradual dampening.
+# Calibrated via sensitivity sweep (2026-03-25): 0.04–0.30 range tested.
 CONCERN_DELTA_MULTIPLIER = 0.12
 
 
-def compute_concern_influence(world: WorldState) -> list[tuple[str, float]]:
+def compute_concern_influence(world: WorldState) -> list[ConcernEvent]:
     """Compute negative influence from skeptical/low-interest NPCs.
 
     Unlike positive spread (which makes new people AWARE), concern propagation
@@ -312,10 +332,20 @@ def compute_concern_influence(world: WorldState) -> list[tuple[str, float]]:
     - Targets must be aware and above CONCERN_TARGET_MIN_INTEREST (no point
       dampening someone who's already negative).
 
+    Content-aware resonance (Phase 1 hybrid upgrades):
+    - Source NPC's objections are classified into themes.
+    - The concern delta is multiplied by the target archetype's resonance
+      for that theme. A price concern hits a price_pragmatist harder (1.7x)
+      than a brand_buyer (low price sensitivity).
+    - NPCs without objections use theme "general" (resonance = 1.0).
+
     Returns:
-        List of (target_npc_id, negative_delta) tuples.
+        List of ConcernEvent objects preserving per-source attribution.
+        Engine.py iterates these individually to apply deltas and write
+        PeerWarning memory. This preserves propagation.py's contract of
+        computing without mutating NPC state.
     """
-    concern_deltas: dict[str, float] = {}
+    events: list[ConcernEvent] = []
 
     for npc in world.aware_npcs:
         if npc.state.interest_score >= CONCERN_INTEREST_THRESHOLD:
@@ -324,8 +354,21 @@ def compute_concern_influence(world: WorldState) -> list[tuple[str, float]]:
         concern_strength = CONCERN_INTEREST_THRESHOLD - npc.state.interest_score
 
         # Source credibility: a skeptic's warning carries more weight
-        archetype_id = getattr(npc, "archetype", None)
-        credibility = _SOURCE_CREDIBILITY.get(archetype_id or "", 1.0)
+        source_archetype = getattr(npc, "archetype", None) or ""
+        credibility = _SOURCE_CREDIBILITY.get(source_archetype, 1.0)
+
+        # Determine the theme this NPC is spreading
+        # Use pre-classified objection_themes if available (set during apply_reaction),
+        # otherwise classify the top objection on the fly.
+        if npc.state.objection_themes:
+            theme = get_primary_concern_theme(npc.state.objection_themes)
+        elif npc.state.objections:
+            theme = classify_objection_theme(npc.state.objections[0])
+        else:
+            theme = "general"
+
+        # Top objection text for memory recording
+        objection_content = npc.state.objections[0] if npc.state.objections else ""
 
         # NPCs with specific objections are more vocal (bonus to share prob)
         has_objections = bool(npc.state.objections)
@@ -349,7 +392,25 @@ def compute_concern_influence(world: WorldState) -> list[tuple[str, float]]:
             )
 
             if random.random() < share_prob:
-                delta = -(concern_strength * trust * credibility * CONCERN_DELTA_MULTIPLIER)
-                concern_deltas[conn_id] = concern_deltas.get(conn_id, 0.0) + delta
+                raw_delta = -(
+                    concern_strength * trust * credibility * CONCERN_DELTA_MULTIPLIER
+                )
 
-    return list(concern_deltas.items())
+                # Content-aware resonance: amplify/dampen based on target archetype
+                target_archetype = getattr(conn, "archetype", None)
+                resonance = get_resonance(target_archetype, theme)
+                final_delta = round(raw_delta * resonance, 4)
+
+                events.append(ConcernEvent(
+                    target_id=conn_id,
+                    source_id=npc.id,
+                    source_name=npc.name,
+                    source_archetype=source_archetype,
+                    raw_delta=round(raw_delta, 4),
+                    resonance=resonance,
+                    final_delta=final_delta,
+                    theme=theme,
+                    objection_content=objection_content,
+                ))
+
+    return events

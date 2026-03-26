@@ -302,18 +302,31 @@ def apply_run_config(rc: RunConfig):
 def _patch_concern_share_mult(prop_mod, multiplier: float):
     """Replace compute_concern_influence with a version using the given multiplier."""
     import random as _random
+    from backend.simulation.npc import ConcernEvent
+    from backend.simulation.resonance import (
+        classify_objection_theme,
+        get_primary_concern_theme,
+        get_resonance,
+    )
 
     _SOURCE_CRED = prop_mod._SOURCE_CREDIBILITY
 
-    def patched_concern_influence(world) -> list[tuple[str, float]]:
-        concern_deltas: dict[str, float] = {}
+    def patched_concern_influence(world) -> list[ConcernEvent]:
+        events: list[ConcernEvent] = []
         for npc in world.aware_npcs:
             if npc.state.interest_score >= prop_mod.CONCERN_INTEREST_THRESHOLD:
                 continue
             concern_strength = prop_mod.CONCERN_INTEREST_THRESHOLD - npc.state.interest_score
-            archetype_id = getattr(npc, "archetype", None)
-            credibility = _SOURCE_CRED.get(archetype_id or "", 1.0)
+            source_archetype = getattr(npc, "archetype", None) or ""
+            credibility = _SOURCE_CRED.get(source_archetype, 1.0)
             objection_bonus = 1.5 if npc.state.objections else 1.0
+            if npc.state.objection_themes:
+                theme = get_primary_concern_theme(npc.state.objection_themes)
+            elif npc.state.objections:
+                theme = classify_objection_theme(npc.state.objections[0])
+            else:
+                theme = "general"
+            objection_content = npc.state.objections[0] if npc.state.objections else ""
             for conn_id in npc.social_connections:
                 conn = world.npcs.get(conn_id)
                 if not conn or not conn.state.aware:
@@ -329,9 +342,22 @@ def _patch_concern_share_mult(prop_mod, multiplier: float):
                     * objection_bonus
                 )
                 if _random.random() < share_prob:
-                    delta = -(concern_strength * trust * credibility * 0.12)
-                    concern_deltas[conn_id] = concern_deltas.get(conn_id, 0.0) + delta
-        return list(concern_deltas.items())
+                    raw_delta = -(concern_strength * trust * credibility * 0.12)
+                    target_archetype = getattr(conn, "archetype", None)
+                    resonance = get_resonance(target_archetype, theme)
+                    final_delta = round(raw_delta * resonance, 4)
+                    events.append(ConcernEvent(
+                        target_id=conn_id,
+                        source_id=npc.id,
+                        source_name=npc.name,
+                        source_archetype=source_archetype,
+                        raw_delta=round(raw_delta, 4),
+                        resonance=resonance,
+                        final_delta=final_delta,
+                        theme=theme,
+                        objection_content=objection_content,
+                    ))
+        return events
 
     prop_mod.compute_concern_influence = patched_concern_influence
     # Also patch the import in engine.py

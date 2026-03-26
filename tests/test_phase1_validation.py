@@ -98,15 +98,15 @@ def _make_world(npcs: list[Npc], tick: int = 1) -> WorldState:
 # ===========================================================================
 
 def test_would_recommend_rederived():
-    """would_recommend should update when interest_score crosses 0.65."""
+    """would_recommend should update when interest_score crosses RECOMMEND_THRESHOLD (0.72)."""
     npc = _make_npc("npc_1")
     npc.state.aware = True
     npc.state.interest_score = 0.40
     npc.state.would_recommend = False
 
     # Simulate interest rising through discussion
-    npc.state.apply_discussion_outcome(0.30, tick=2, partner_id="npc_2")
-    # interest is now 0.70
+    npc.state.apply_discussion_outcome(0.35, tick=2, partner_id="npc_2")
+    # interest is now 0.75 (above RECOMMEND_THRESHOLD 0.72)
     npc.state.update_would_recommend()
 
     assert npc.state.would_recommend is True, (
@@ -115,7 +115,7 @@ def test_would_recommend_rederived():
 
     # Interest drops below threshold
     npc.state.apply_discussion_outcome(-0.10, tick=3, partner_id="npc_3")
-    # interest is now 0.60
+    # interest is now 0.65 (below RECOMMEND_THRESHOLD 0.72)
     npc.state.update_would_recommend()
 
     assert npc.state.would_recommend is False, (

@@ -9,7 +9,7 @@ from typing import Callable
 from backend.config import settings
 from backend.llm.client import llm_client
 from backend.simulation.convergence import ConvergenceTracker
-from backend.simulation.npc import Npc
+from backend.simulation.npc import Npc, PeerWarning
 from backend.simulation.adoption import compute_world_adoptions
 from backend.simulation.asset_signals import AssetSignals, compute_asset_adjustment
 from backend.simulation.competition import classify_alternatives, compute_competition_adjustment
@@ -312,34 +312,67 @@ def _run_tick(world: WorldState, tick: int, emit: EventCallback):
                 },
             })
 
-    # --- Phase 4b: Concern propagation (negative influence) ---
-    concern_deltas = compute_concern_influence(world)
-    for target_id, delta in concern_deltas:
+    # --- Phase 4b: Concern propagation (negative influence, content-aware) ---
+    concern_events = compute_concern_influence(world)
+
+    # Group concern events by target for aggregation and event enrichment
+    from collections import defaultdict
+    target_concerns: dict[str, list] = defaultdict(list)
+    for evt in concern_events:
+        target_concerns[evt.target_id].append(evt)
+
+    # Apply aggregated deltas and emit events with per-source details
+    for target_id, events in target_concerns.items():
         target_npc = world.npcs.get(target_id)
-        if target_npc:
-            old_interest = target_npc.state.interest_score
-            new_stance = target_npc.state.apply_influence(delta, tick)
+        if not target_npc:
+            continue
+        total_delta = sum(e.final_delta for e in events)
+        old_interest = target_npc.state.interest_score
+        new_stance = target_npc.state.apply_influence(total_delta, tick)
+        emit({
+            "type": "concern_applied",
+            "tick": tick,
+            "data": {
+                "npc_id": target_npc.id, "name": target_npc.name,
+                "delta": round(total_delta, 4),
+                "old_interest": round(old_interest, 3),
+                "new_interest": round(target_npc.state.interest_score, 3),
+                "sources": [
+                    {
+                        "source_name": e.source_name,
+                        "theme": e.theme,
+                        "content": e.objection_content[:150],
+                        "delta": round(e.final_delta, 4),
+                    }
+                    for e in events if e.objection_content
+                ],
+            },
+        })
+        if new_stance:
             emit({
-                "type": "concern_applied",
+                "type": "npc_state_change",
                 "tick": tick,
                 "data": {
                     "npc_id": target_npc.id, "name": target_npc.name,
-                    "delta": round(delta, 4),
-                    "old_interest": round(old_interest, 3),
-                    "new_interest": round(target_npc.state.interest_score, 3),
+                    "new_stance": new_stance,
+                    "interest_score": round(target_npc.state.interest_score, 3),
+                    "reason": "concern_influence",
                 },
             })
-            if new_stance:
-                emit({
-                    "type": "npc_state_change",
-                    "tick": tick,
-                    "data": {
-                        "npc_id": target_npc.id, "name": target_npc.name,
-                        "new_stance": new_stance,
-                        "interest_score": round(target_npc.state.interest_score, 3),
-                        "reason": "concern_influence",
-                    },
-                })
+
+    # Write PeerWarning memory per individual concern event (preserves source attribution)
+    for evt in (e for evts in target_concerns.values() for e in evts):
+        target_npc = world.npcs.get(evt.target_id)
+        if target_npc and evt.objection_content:
+            target_npc.state.record_peer_warning(PeerWarning(
+                tick=tick,
+                source_id=evt.source_id,
+                source_name=evt.source_name,
+                source_archetype=evt.source_archetype,
+                theme=evt.theme,
+                content=evt.objection_content,
+                delta=evt.final_delta,
+            ))
 
     # --- Re-derive would_recommend before spread (interest may have changed) ---
     for npc in world.aware_npcs:
@@ -506,7 +539,21 @@ def _run_discussion(
     world: WorldState, npc_a: Npc, npc_b: Npc, tick: int, emit: EventCallback
 ):
     """Simulate a discussion between two NPCs."""
+    from backend.llm.prompts import format_social_memory
+
     trust = npc_a.trust_weights.get(npc_b.id, 0.5)
+
+    # Format social memory for each participant (peer warnings + past discussions)
+    memory_a = format_social_memory(
+        npc_a.state.peer_warnings,
+        npc_a.state.discussion_memories,
+        npc_a.state.objection_themes,
+    )
+    memory_b = format_social_memory(
+        npc_b.state.peer_warnings,
+        npc_b.state.discussion_memories,
+        npc_b.state.objection_themes,
+    )
 
     emit({
         "type": "discussion_start",
@@ -527,9 +574,22 @@ def _run_discussion(
             stance_b=npc_b.state.stance,
             interest_b=npc_b.state.interest_score,
             trust_level=trust,
+            memory_a=memory_a,
+            memory_b=memory_b,
         )
     except Exception:
         logger.exception("Discussion LLM failed for %s and %s", npc_a.id, npc_b.id)
+        # Still set cooldown so this pair doesn't retry every tick on persistent failure
+        world.discussion_cooldowns[frozenset({npc_a.id, npc_b.id})] = tick
+        emit({
+            "type": "discussion_error",
+            "tick": tick,
+            "data": {
+                "npc_a_id": npc_a.id, "npc_a_name": npc_a.name,
+                "npc_b_id": npc_b.id, "npc_b_name": npc_b.name,
+                "reason": "llm_failure",
+            },
+        })
         return
 
     outcome = result.get("outcome", {})
@@ -567,8 +627,12 @@ def _run_discussion(
             b_room = max(0.0, b_ceiling - npc_b.state.interest_score)
             b_delta = min(b_delta, b_room)
 
-    a_new_stance = npc_a.state.apply_discussion_outcome(a_delta, tick, npc_b.id)
-    b_new_stance = npc_b.state.apply_discussion_outcome(b_delta, tick, npc_a.id)
+    a_new_stance = npc_a.state.apply_discussion_outcome(
+        a_delta, tick, npc_b.id, partner_name=npc_b.name, key_point=key_point,
+    )
+    b_new_stance = npc_b.state.apply_discussion_outcome(
+        b_delta, tick, npc_a.id, partner_name=npc_a.name, key_point=key_point,
+    )
 
     emit({
         "type": "discussion_end",

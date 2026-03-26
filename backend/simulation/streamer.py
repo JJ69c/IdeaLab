@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import threading
+import time
+
+logger = logging.getLogger(__name__)
+
+# How long (seconds) to keep completed simulation events in memory
+# before auto-purging.  Gives SSE clients time to finish reading.
+CLEANUP_DELAY_SECONDS = 120
 
 
 class SimulationEventStore:
@@ -10,11 +18,15 @@ class SimulationEventStore:
 
     Thread-safe: the simulation runs in a background thread and pushes events,
     while the SSE endpoint reads from the main async thread.
+
+    Completed simulations are auto-purged after CLEANUP_DELAY_SECONDS to
+    prevent unbounded memory growth.
     """
 
     def __init__(self):
         self._events: dict[str, list[dict]] = {}
         self._complete: dict[str, bool] = {}
+        self._completed_at: dict[str, float] = {}  # sim_id → monotonic timestamp
         self._lock = threading.Lock()
 
     def push(self, sim_id: str, event: dict):
@@ -24,6 +36,7 @@ class SimulationEventStore:
     def mark_complete(self, sim_id: str):
         with self._lock:
             self._complete[sim_id] = True
+            self._completed_at[sim_id] = time.monotonic()
 
     def is_complete(self, sim_id: str) -> bool:
         with self._lock:
@@ -46,6 +59,34 @@ class SimulationEventStore:
         with self._lock:
             self._events.pop(sim_id, None)
             self._complete.pop(sim_id, None)
+            self._completed_at.pop(sim_id, None)
+
+    def purge_stale(self):
+        """Remove completed simulations older than CLEANUP_DELAY_SECONDS.
+
+        Call this periodically (e.g. after each simulation completes or from
+        a background timer) to bound memory usage.
+        """
+        now = time.monotonic()
+        to_remove: list[str] = []
+        with self._lock:
+            for sim_id, completed_at in self._completed_at.items():
+                if now - completed_at > CLEANUP_DELAY_SECONDS:
+                    to_remove.append(sim_id)
+            for sim_id in to_remove:
+                event_count = len(self._events.get(sim_id, []))
+                self._events.pop(sim_id, None)
+                self._complete.pop(sim_id, None)
+                self._completed_at.pop(sim_id, None)
+                logger.info(
+                    "Purged event store for sim %s (%d events freed)", sim_id, event_count
+                )
+        return len(to_remove)
+
+    def active_count(self) -> int:
+        """Number of simulations currently held in memory."""
+        with self._lock:
+            return len(self._events)
 
 
 # Singleton — shared between the simulation thread and SSE endpoint

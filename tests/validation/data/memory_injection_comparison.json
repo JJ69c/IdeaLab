@@ -1,0 +1,156 @@
+{
+  "config": {
+    "num_ticks": 4,
+    "population_size": 15
+  },
+  "with_memory": {
+    "ai_vitamin_pack": {
+      "num_discussions": 20,
+      "num_exchanges": 80,
+      "num_concerns": 6,
+      "num_concern_sources": 4,
+      "theme_mentions_in_discussions": {
+        "price": 7,
+        "evidence": 7,
+        "complexity": 1,
+        "social_proof": 3,
+        "ethics": 1,
+        "privacy": 1
+      },
+      "total_theme_mentions": 20,
+      "avg_exchange_length": 424.675,
+      "num_key_points": 20,
+      "mean_interest": 0.174375,
+      "stance_distribution": {
+        "opposed": 3,
+        "skeptical": 3,
+        "indifferent": 1,
+        "curious": 1
+      }
+    },
+    "budget_meal_planner": {
+      "num_discussions": 20,
+      "num_exchanges": 81,
+      "num_concerns": 9,
+      "num_concern_sources": 9,
+      "theme_mentions_in_discussions": {
+        "price": 7,
+        "evidence": 5,
+        "complexity": 4,
+        "social_proof": 1,
+        "ethics": 2,
+        "privacy": 1
+      },
+      "total_theme_mentions": 20,
+      "avg_exchange_length": 409.2345679012346,
+      "num_key_points": 20,
+      "mean_interest": 0.208375,
+      "stance_distribution": {
+        "skeptical": 3,
+        "interested": 2,
+        "curious": 1,
+        "opposed": 1,
+        "willing_to_try": 1
+      }
+    },
+    "designhive": {
+      "num_discussions": 18,
+      "num_exchanges": 72,
+      "num_concerns": 6,
+      "num_concern_sources": 7,
+      "theme_mentions_in_discussions": {
+        "price": 3,
+        "evidence": 7,
+        "complexity": 3,
+        "social_proof": 3
+      },
+      "total_theme_mentions": 16,
+      "avg_exchange_length": 409.43055555555554,
+      "num_key_points": 18,
+      "mean_interest": 0.32466666666666666,
+      "stance_distribution": {
+        "skeptical": 2,
+        "interested": 2,
+        "indifferent": 1,
+        "opposed": 2,
+        "willing_to_pay": 1,
+        "willing_to_try": 1
+      }
+    }
+  },
+  "without_memory": {
+    "ai_vitamin_pack": {
+      "num_discussions": 16,
+      "num_exchanges": 67,
+      "num_concerns": 4,
+      "num_concern_sources": 4,
+      "theme_mentions_in_discussions": {
+        "price": 6,
+        "evidence": 6,
+        "complexity": 2,
+        "social_proof": 3,
+        "ethics": 3,
+        "privacy": 1
+      },
+      "total_theme_mentions": 21,
+      "avg_exchange_length": 356.76119402985074,
+      "num_key_points": 16,
+      "mean_interest": 0.2,
+      "stance_distribution": {
+        "skeptical": 3,
+        "curious": 2,
+        "opposed": 2,
+        "willing_to_pay": 1
+      }
+    },
+    "budget_meal_planner": {
+      "num_discussions": 20,
+      "num_exchanges": 80,
+      "num_concerns": 9,
+      "num_concern_sources": 11,
+      "theme_mentions_in_discussions": {
+        "price": 6,
+        "evidence": 6,
+        "complexity": 1,
+        "social_proof": 4,
+        "ethics": 1,
+        "privacy": 1
+      },
+      "total_theme_mentions": 19,
+      "avg_exchange_length": 372.825,
+      "num_key_points": 20,
+      "mean_interest": 0.22362499999999996,
+      "stance_distribution": {
+        "skeptical": 1,
+        "indifferent": 2,
+        "interested": 1,
+        "opposed": 2,
+        "curious": 2
+      }
+    },
+    "designhive": {
+      "num_discussions": 20,
+      "num_exchanges": 87,
+      "num_concerns": 5,
+      "num_concern_sources": 7,
+      "theme_mentions_in_discussions": {
+        "price": 7,
+        "evidence": 5,
+        "complexity": 5,
+        "social_proof": 4,
+        "ethics": 1,
+        "privacy": 1
+      },
+      "total_theme_mentions": 23,
+      "avg_exchange_length": 341.4942528735632,
+      "num_key_points": 20,
+      "mean_interest": 0.286375,
+      "stance_distribution": {
+        "indifferent": 3,
+        "curious": 2,
+        "skeptical": 1,
+        "opposed": 2
+      }
+    }
+  }
+}

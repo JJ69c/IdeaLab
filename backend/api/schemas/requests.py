@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class IdeaInput(BaseModel):
@@ -25,6 +25,15 @@ class SimulationConfigInput(BaseModel):
     num_ticks: int = Field(default=8, ge=3, le=20, description="Number of simulation rounds")
     population_size: int = Field(default=30, ge=10, le=50, description="Number of NPCs")
     seed_count: int = Field(default=8, ge=1, le=15, description="NPCs initially exposed")
+
+    @model_validator(mode="after")
+    def seed_within_population(self) -> "SimulationConfigInput":
+        if self.seed_count > self.population_size:
+            raise ValueError(
+                f"seed_count ({self.seed_count}) cannot exceed "
+                f"population_size ({self.population_size})"
+            )
+        return self
 
 
 class AssetReference(BaseModel):

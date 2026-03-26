@@ -46,15 +46,21 @@ directional signal before committing resources.
 - LLM-driven NPC reactions and discussions
 - Deterministic social influence and propagation math
 - Structured JSON/dashboard report
-- Simulation history persistence (SQLite)
+- Simulation history persistence (PostgreSQL, SQLite fallback)
 
-### Out of Scope (v1)
+### Delivered Beyond MVP
+- Real-time SSE streaming with live social graph
+- Comparison mode (A/B variant testing with AI explanation)
+- Multi-user auth (JWT-based, user-scoped simulations)
+- Asset analysis (LLM vision on uploaded reference images)
+- NPC chat (Ask any NPC post-simulation)
+- Competition context analysis
+- Per-archetype adoption thresholds
+
+### Out of Scope (future)
 - 3D world or visual map
-- Real-time streaming simulation
 - Voice interaction
-- Custom NPC creation (Phase 3)
-- Multi-user / team features
-- Comparison mode (A/B idea testing)
+- Custom NPC creation
 - PDF export
 - Mobile app
 

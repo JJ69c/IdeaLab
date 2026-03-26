@@ -80,6 +80,7 @@ def compute_npc_adoption(
     personality: dict,
     profile_dict: dict | None = None,
     competition_dict: dict | None = None,
+    archetype_adoption_threshold: float | None = None,
 ) -> AdoptionResult:
     """Compute adoption outcome for a single NPC.
 
@@ -91,6 +92,8 @@ def compute_npc_adoption(
                      price_sensitivity, conformity, etc.
         profile_dict: ProductProfile.to_dict() — product-level dimensions.
         competition_dict: CompetitionContext.to_dict() — competition dimensions.
+        archetype_adoption_threshold: Per-archetype threshold (from archetypes.json).
+            Falls back to ADOPTION_THRESHOLD if None.
 
     Returns:
         AdoptionResult with adopted flag, score, and barrier breakdown.
@@ -176,7 +179,8 @@ def compute_npc_adoption(
         if barrier_values[key] > 0.5:
             blockers.append(label)
 
-    adopted = adoption_score >= ADOPTION_THRESHOLD
+    threshold = archetype_adoption_threshold if archetype_adoption_threshold is not None else ADOPTION_THRESHOLD
+    adopted = adoption_score >= threshold
 
     return AdoptionResult(
         adopted=adopted,
@@ -193,6 +197,8 @@ def compute_world_adoptions(world) -> dict:
     Sets adoption fields on each aware NPC's state and returns summary stats.
     Call after all tick phases complete (interest_score is settled for this tick).
     """
+    from backend.simulation.evaluation import get_archetype_evaluation
+
     profile_dict = (
         world.product_profile.to_dict()
         if getattr(world, "product_profile", None)
@@ -209,6 +215,13 @@ def compute_world_adoptions(world) -> dict:
 
     for npc in world.npcs.values():
         personality = npc.to_profile_dict().get("personality", {})
+        # Look up archetype-specific adoption threshold
+        arch_threshold = None
+        arch_id = getattr(npc, "archetype", None)
+        if arch_id:
+            eval_def = get_archetype_evaluation(arch_id)
+            if eval_def:
+                arch_threshold = eval_def.adoption_threshold
         result = compute_npc_adoption(
             interest_score=npc.state.interest_score,
             would_pay=npc.state.would_pay,
@@ -216,6 +229,7 @@ def compute_world_adoptions(world) -> dict:
             personality=personality,
             profile_dict=profile_dict,
             competition_dict=competition_dict,
+            archetype_adoption_threshold=arch_threshold,
         )
         npc.state.adopted = result.adopted
         npc.state.adoption_score = result.score

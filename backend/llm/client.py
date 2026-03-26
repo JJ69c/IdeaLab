@@ -4,12 +4,30 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 
 import anthropic
 
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Retry configuration
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1.0   # seconds; doubles each retry → 1s, 2s, 4s
+RETRY_MAX_DELAY = 8.0
+
+
+def _strip_markdown_fences(text: str) -> str:
+    """Remove markdown code fences that LLMs sometimes wrap around JSON."""
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        # Remove opening fence (and optional language tag like ```json)
+        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[: cleaned.rfind("```")]
+        cleaned = cleaned.strip()
+    return cleaned
 
 
 class LLMClient:
@@ -19,29 +37,52 @@ class LLMClient:
     def _call(
         self, system: str, user: str, model: str | None = None, max_tokens: int = 4096
     ) -> str:
-        """Make a single LLM call and return the text response."""
+        """Make a single LLM call with retry on transient failures."""
         model = model or settings.reaction_model
-        response = self.client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-        return response.content[0].text
+        last_exc: Exception | None = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = self.client.messages.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    system=system,
+                    messages=[{"role": "user", "content": user}],
+                )
+                return response.content[0].text
+            except (
+                anthropic.APITimeoutError,
+                anthropic.RateLimitError,
+                anthropic.InternalServerError,
+                anthropic.APIConnectionError,
+            ) as exc:
+                last_exc = exc
+                delay = min(RETRY_BASE_DELAY * (2 ** attempt), RETRY_MAX_DELAY)
+                logger.warning(
+                    "LLM call failed (attempt %d/%d, retrying in %.1fs): %s",
+                    attempt + 1, MAX_RETRIES, delay, exc,
+                )
+                time.sleep(delay)
+        raise last_exc  # type: ignore[misc]
 
     def _call_json(
         self, system: str, user: str, model: str | None = None, max_tokens: int = 4096
     ) -> dict | list:
-        """Make an LLM call and parse the response as JSON."""
-        raw = self._call(system, user, model, max_tokens)
-        # Strip markdown fences if the model wraps output
-        cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1]
-            if cleaned.endswith("```"):
-                cleaned = cleaned[: cleaned.rfind("```")]
-            cleaned = cleaned.strip()
-        return json.loads(cleaned)
+        """Make an LLM call and parse the response as JSON with retry on parse failure."""
+        last_exc: Exception | None = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                raw = self._call(system, user, model, max_tokens)
+                cleaned = _strip_markdown_fences(raw)
+                return json.loads(cleaned)
+            except json.JSONDecodeError as exc:
+                last_exc = exc
+                logger.warning(
+                    "JSON parse failed (attempt %d/%d): %s — raw[:200]: %s",
+                    attempt + 1, MAX_RETRIES, exc, raw[:200] if raw else "",
+                )
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(RETRY_BASE_DELAY)
+        raise last_exc  # type: ignore[misc]
 
     def batch_react(
         self, npc_profiles: list[dict], idea: dict,
@@ -91,6 +132,8 @@ class LLMClient:
         stance_b: str,
         interest_b: float,
         trust_level: float,
+        memory_a: str = "",
+        memory_b: str = "",
     ) -> dict:
         """Simulate a discussion between two NPCs about an idea."""
         from backend.llm.prompts import (
@@ -109,6 +152,8 @@ class LLMClient:
             stance_b=stance_b,
             interest_b=interest_b,
             trust_level=trust_level,
+            memory_a=memory_a,
+            memory_b=memory_b,
         )
 
         result = self._call_json(DISCUSSION_SYSTEM, prompt)

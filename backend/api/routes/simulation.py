@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.auth import get_optional_user
 from backend.api.schemas.requests import AskNpcRequest, AssetReference, CreateSimulationRequest
 from backend.api.schemas.responses import AskNpcResponse, SimulationDetail, SimulationSummary
 from backend.db.database import SyncSession, async_session, get_db
@@ -24,6 +25,9 @@ from backend.simulation.world import InjectedIdea, SimConfig
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/simulations", tags=["simulations"])
 
+# Maximum time (seconds) a simulation can run before being marked as failed.
+SIMULATION_TIMEOUT_SECONDS = 15 * 60  # 15 minutes
+
 
 # ---------------------------------------------------------------------------
 # POST — Create simulation (starts in background, returns immediately)
@@ -33,6 +37,7 @@ router = APIRouter(prefix="/api/simulations", tags=["simulations"])
 async def create_simulation(
     request: CreateSimulationRequest,
     db: AsyncSession = Depends(get_db),
+    user_id: str | None = Depends(get_optional_user),
 ):
     """Create a simulation and start it in the background.
 
@@ -81,6 +86,7 @@ async def create_simulation(
         root_simulation_id=root_simulation_id,
         variant_name=request.variant_name,
         changed_fields=changed_fields,
+        user_id=user_id,
     )
     db.add(record)
     await db.commit()
@@ -135,13 +141,8 @@ async def create_simulation(
     # Pre-register so SSE clients can connect before first emit
     event_store.register(sim_id)
 
-    # Launch simulation in a background thread
-    thread = threading.Thread(
-        target=_run_simulation_thread,
-        args=(sim_id, idea, config, asset_file_paths, asset_metadata),
-        daemon=True,
-    )
-    thread.start()
+    # Launch simulation in a background thread with a timeout watchdog
+    _launch_with_timeout(sim_id, idea, config, asset_file_paths, asset_metadata)
 
     return SimulationDetail(
         id=record.id,
@@ -197,6 +198,54 @@ def _compute_changed_fields(
             changed.append(field)
 
     return changed
+
+
+def _launch_with_timeout(
+    sim_id: str,
+    idea: InjectedIdea,
+    config: SimConfig,
+    asset_file_paths: list[str] | None = None,
+    asset_metadata: list[dict] | None = None,
+):
+    """Launch the simulation thread and a watchdog that enforces a timeout.
+
+    If the simulation thread doesn't finish within SIMULATION_TIMEOUT_SECONDS,
+    the watchdog marks it as failed in the database and signals completion to
+    the event store so SSE clients disconnect.  The daemon thread is then
+    abandoned (Python will clean it up on process exit).
+    """
+
+    def _watchdog(worker: threading.Thread):
+        worker.join(timeout=SIMULATION_TIMEOUT_SECONDS)
+        if worker.is_alive():
+            logger.error("Simulation %s timed out after %ds", sim_id, SIMULATION_TIMEOUT_SECONDS)
+            # Emit error event so SSE clients see the timeout
+            event_store.push(sim_id, {
+                "type": "error",
+                "tick": 0,
+                "data": {"message": f"Simulation timed out after {SIMULATION_TIMEOUT_SECONDS // 60} minutes"},
+            })
+            event_store.mark_complete(sim_id)
+            # Mark as failed in DB
+            try:
+                db_session = SyncSession()
+                record = db_session.get(SimulationRecord, sim_id)
+                if record and record.status == "running":
+                    record.status = "failed"
+                    db_session.commit()
+                db_session.close()
+            except Exception:
+                logger.warning("Failed to mark timed-out sim %s as failed", sim_id, exc_info=True)
+
+    worker = threading.Thread(
+        target=_run_simulation_thread,
+        args=(sim_id, idea, config, asset_file_paths, asset_metadata),
+        daemon=True,
+    )
+    worker.start()
+
+    watchdog = threading.Thread(target=_watchdog, args=(worker,), daemon=True)
+    watchdog.start()
 
 
 def _run_simulation_thread(
@@ -280,6 +329,8 @@ def _run_simulation_thread(
     finally:
         db_session.close()
         event_store.mark_complete(sim_id)
+        # Purge any stale completed simulations to bound memory usage
+        event_store.purge_stale()
 
 
 # ---------------------------------------------------------------------------
@@ -348,6 +399,8 @@ async def _live_event_generator(simulation_id: str):
             break
         else:
             await asyncio.sleep(0.3)
+    # Client has received all events — safe to free memory immediately
+    event_store.cleanup(simulation_id)
 
 
 async def _replay_event_generator(simulation_id: str):
@@ -375,10 +428,15 @@ async def _replay_event_generator(simulation_id: str):
 # ---------------------------------------------------------------------------
 
 @router.get("", response_model=list[SimulationSummary])
-async def list_simulations(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(SimulationRecord).order_by(SimulationRecord.created_at.desc()).limit(50)
-    )
+async def list_simulations(
+    db: AsyncSession = Depends(get_db),
+    user_id: str | None = Depends(get_optional_user),
+):
+    query = select(SimulationRecord)
+    if user_id:
+        query = query.where(SimulationRecord.user_id == user_id)
+    query = query.order_by(SimulationRecord.created_at.desc()).limit(50)
+    result = await db.execute(query)
     records = result.scalars().all()
     return [
         SimulationSummary(
@@ -893,6 +951,7 @@ async def _gather_npc_context(
     }
     timeline = []
     discussions = []
+    peer_warnings = []
 
     for ev in db_events:
         d = ev.data.get("data", {})
@@ -952,6 +1011,22 @@ async def _gather_npc_context(
                     "key_point": d.get("key_point", ""), "delta": delta,
                 })
 
+        elif ev.event_type == "concern_applied" and d.get("npc_id") == npc_id:
+            # Reconstruct peer warnings from enriched concern events
+            for src in d.get("sources", []):
+                peer_warnings.append({
+                    "tick": ev.tick,
+                    "source_name": src.get("source_name", "someone"),
+                    "theme": src.get("theme", ""),
+                    "content": src.get("content", ""),
+                    "delta": src.get("delta", 0),
+                })
+            timeline.append({
+                "tick": ev.tick, "type": "concern",
+                "detail": f"Heard concerns from {len(d.get('sources', []))} peer(s)",
+                "delta": d.get("delta", 0),
+            })
+
         elif ev.event_type == "npc_state_change" and d.get("npc_id") == npc_id:
             current_state["stance"] = d.get("new_stance", current_state["stance"])
             current_state["interest_score"] = d.get("interest_score", current_state["interest_score"])
@@ -968,4 +1043,5 @@ async def _gather_npc_context(
         "current_state": current_state,
         "timeline": timeline,
         "discussions": discussions,
+        "peer_warnings": peer_warnings,
     }

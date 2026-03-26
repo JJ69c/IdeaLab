@@ -364,11 +364,11 @@ def run_deterministic_simulation(
             npc.state.apply_influence(delta, tick)
 
         # --- Phase 4b: Concern propagation ---
-        concern_deltas = compute_concern_influence(world)
-        for target_id, delta in concern_deltas:
-            target_npc = world.npcs.get(target_id)
+        concern_results = compute_concern_influence(world)
+        for evt in concern_results:
+            target_npc = world.npcs.get(evt.target_id)
             if target_npc:
-                target_npc.state.apply_influence(delta, tick)
+                target_npc.state.apply_influence(evt.final_delta, tick)
                 concern_events += 1
 
         # --- Re-derive would_recommend ---

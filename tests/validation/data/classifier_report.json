@@ -1,0 +1,428 @@
+{
+  "corpus_size": 100,
+  "exact_accuracy": 0.9,
+  "primary_secondary_match_rate": 0.93,
+  "harmful_misclassification_rate": 0.07,
+  "general_fallback_rate": 0.05,
+  "per_theme": {
+    "complexity": {
+      "theme": "complexity",
+      "precision": 1.0,
+      "recall": 0.875,
+      "f1": 0.933,
+      "support": 16,
+      "true_positives": 14,
+      "false_positives": 0,
+      "false_negatives": 2,
+      "harmful_as_fp": 0,
+      "harmful_as_fn": 2
+    },
+    "differentiation": {
+      "theme": "differentiation",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 7,
+      "true_positives": 7,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "harmful_as_fp": 0,
+      "harmful_as_fn": 0
+    },
+    "ethics": {
+      "theme": "ethics",
+      "precision": 0.923,
+      "recall": 0.8,
+      "f1": 0.857,
+      "support": 15,
+      "true_positives": 12,
+      "false_positives": 1,
+      "false_negatives": 3,
+      "harmful_as_fp": 1,
+      "harmful_as_fn": 3
+    },
+    "evidence": {
+      "theme": "evidence",
+      "precision": 0.955,
+      "recall": 0.955,
+      "f1": 0.955,
+      "support": 22,
+      "true_positives": 21,
+      "false_positives": 1,
+      "false_negatives": 1,
+      "harmful_as_fp": 1,
+      "harmful_as_fn": 1
+    },
+    "general": {
+      "theme": "general",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 0,
+      "true_positives": 0,
+      "false_positives": 5,
+      "false_negatives": 0,
+      "harmful_as_fp": 2,
+      "harmful_as_fn": 0
+    },
+    "legitimacy": {
+      "theme": "legitimacy",
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 3,
+      "true_positives": 3,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "harmful_as_fp": 0,
+      "harmful_as_fn": 0
+    },
+    "price": {
+      "theme": "price",
+      "precision": 0.833,
+      "recall": 1.0,
+      "f1": 0.909,
+      "support": 5,
+      "true_positives": 5,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "harmful_as_fp": 1,
+      "harmful_as_fn": 0
+    },
+    "privacy": {
+      "theme": "privacy",
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.889,
+      "support": 5,
+      "true_positives": 4,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "harmful_as_fp": 0,
+      "harmful_as_fn": 1
+    },
+    "relevance": {
+      "theme": "relevance",
+      "precision": 0.917,
+      "recall": 0.786,
+      "f1": 0.846,
+      "support": 14,
+      "true_positives": 11,
+      "false_positives": 1,
+      "false_negatives": 3,
+      "harmful_as_fp": 1,
+      "harmful_as_fn": 0
+    },
+    "social_proof": {
+      "theme": "social_proof",
+      "precision": 0.929,
+      "recall": 1.0,
+      "f1": 0.963,
+      "support": 13,
+      "true_positives": 13,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "harmful_as_fp": 1,
+      "harmful_as_fn": 0
+    }
+  },
+  "confusion_matrix": {
+    "evidence": {
+      "evidence": 21,
+      "general": 1
+    },
+    "relevance": {
+      "relevance": 11,
+      "general": 3
+    },
+    "ethics": {
+      "relevance": 1,
+      "ethics": 12,
+      "social_proof": 1,
+      "evidence": 1
+    },
+    "differentiation": {
+      "differentiation": 7
+    },
+    "complexity": {
+      "complexity": 14,
+      "general": 1,
+      "price": 1
+    },
+    "social_proof": {
+      "social_proof": 13
+    },
+    "privacy": {
+      "ethics": 1,
+      "privacy": 4
+    },
+    "legitimacy": {
+      "legitimacy": 3
+    },
+    "price": {
+      "price": 5
+    }
+  },
+  "theme_distribution_by_product": {
+    "budget_meal_planner": {
+      "evidence": 9,
+      "relevance": 4,
+      "differentiation": 3,
+      "complexity": 8,
+      "privacy": 1,
+      "ethics": 5,
+      "social_proof": 2
+    },
+    "ai_vitamin_pack": {
+      "evidence": 10,
+      "relevance": 2,
+      "differentiation": 1,
+      "social_proof": 4,
+      "ethics": 4,
+      "legitimacy": 1,
+      "price": 3,
+      "complexity": 2,
+      "privacy": 3
+    },
+    "designhive": {
+      "evidence": 3,
+      "relevance": 8,
+      "ethics": 6,
+      "complexity": 6,
+      "social_proof": 7,
+      "price": 2,
+      "legitimacy": 2,
+      "differentiation": 3,
+      "privacy": 1
+    }
+  },
+  "top_harmful_swaps": [
+    {
+      "theme_a": "complexity",
+      "theme_b": "ethics",
+      "max_ratio": 3.6,
+      "worst_archetype": "convenience_user",
+      "harmful": true
+    },
+    {
+      "theme_a": "differentiation",
+      "theme_b": "social_proof",
+      "max_ratio": 3.6,
+      "worst_archetype": "social_follower",
+      "harmful": true
+    },
+    {
+      "theme_a": "evidence",
+      "theme_b": "social_proof",
+      "max_ratio": 3.6,
+      "worst_archetype": "analytical_skeptic",
+      "harmful": true
+    },
+    {
+      "theme_a": "social_proof",
+      "theme_b": "ethics",
+      "max_ratio": 3.6,
+      "worst_archetype": "social_follower",
+      "harmful": true
+    },
+    {
+      "theme_a": "price",
+      "theme_b": "ethics",
+      "max_ratio": 3.0,
+      "worst_archetype": "price_pragmatist",
+      "harmful": true
+    },
+    {
+      "theme_a": "privacy",
+      "theme_b": "social_proof",
+      "max_ratio": 3.0,
+      "worst_archetype": "analytical_skeptic",
+      "harmful": true
+    },
+    {
+      "theme_a": "price",
+      "theme_b": "differentiation",
+      "max_ratio": 2.8,
+      "worst_archetype": "brand_buyer",
+      "harmful": true
+    },
+    {
+      "theme_a": "price",
+      "theme_b": "social_proof",
+      "max_ratio": 2.6,
+      "worst_archetype": "analytical_skeptic",
+      "harmful": true
+    },
+    {
+      "theme_a": "price",
+      "theme_b": "relevance",
+      "max_ratio": 2.6,
+      "worst_archetype": "brand_buyer",
+      "harmful": true
+    },
+    {
+      "theme_a": "complexity",
+      "theme_b": "differentiation",
+      "max_ratio": 2.6,
+      "worst_archetype": "social_follower",
+      "harmful": true
+    },
+    {
+      "theme_a": "differentiation",
+      "theme_b": "evidence",
+      "max_ratio": 2.6,
+      "worst_archetype": "trend_adopter",
+      "harmful": true
+    },
+    {
+      "theme_a": "differentiation",
+      "theme_b": "ethics",
+      "max_ratio": 2.6,
+      "worst_archetype": "trend_adopter",
+      "harmful": true
+    },
+    {
+      "theme_a": "legitimacy",
+      "theme_b": "social_proof",
+      "max_ratio": 2.6,
+      "worst_archetype": "analytical_skeptic",
+      "harmful": true
+    },
+    {
+      "theme_a": "ethics",
+      "theme_b": "relevance",
+      "max_ratio": 2.6,
+      "worst_archetype": "convenience_user",
+      "harmful": true
+    },
+    {
+      "theme_a": "complexity",
+      "theme_b": "evidence",
+      "max_ratio": 2.571,
+      "worst_archetype": "analytical_skeptic",
+      "harmful": true
+    }
+  ],
+  "mismatch_details": [
+    {
+      "objection_id": 63,
+      "text": "Niche platform may exclude underrepresented designers due to network effects and cost barriers",
+      "auto": "social_proof",
+      "human_primary": "ethics",
+      "human_secondary": "social_proof",
+      "harmful": true,
+      "resonance_ratio": 3.6,
+      "confusion_note": "Classified as social_proof but core complaint is about exclusion of underrepresented designers and equity (ethics); network effects are the mechanism, not the concern"
+    },
+    {
+      "objection_id": 15,
+      "text": "Centralised platform model doesn't align with community organizer values of shared power",
+      "auto": "relevance",
+      "human_primary": "ethics",
+      "human_secondary": "none",
+      "harmful": true,
+      "resonance_ratio": 2.6,
+      "confusion_note": "Classified as relevance but core complaint is about governance values and power structure (ethics), not audience fit"
+    },
+    {
+      "objection_id": 57,
+      "text": "Does 'budget-optimized' mean cheap foods only, or smart substitutions that maintain quality?",
+      "auto": "general",
+      "human_primary": "evidence",
+      "human_secondary": "none",
+      "harmful": true,
+      "resonance_ratio": 2.0,
+      "confusion_note": "Classified as price due to budget keyword, but core complaint questions how the algorithm works and whether claims are substantiated (evidence)"
+    },
+    {
+      "objection_id": 98,
+      "text": "Concerned that cost-minimization algorithms will default to environmentally destructive, low-cost pr",
+      "auto": "evidence",
+      "human_primary": "ethics",
+      "human_secondary": "none",
+      "harmful": true,
+      "resonance_ratio": 2.0,
+      "confusion_note": "Classified as evidence but core complaint is about environmental harm from algorithmic choices (ethics)"
+    },
+    {
+      "objection_id": 60,
+      "text": "Unwilling to invest time building presence in yet another social network without proven ROI",
+      "auto": "price",
+      "human_primary": "complexity",
+      "human_secondary": "price",
+      "harmful": true,
+      "resonance_ratio": 1.857,
+      "confusion_note": "Classified as price but leading complaint is about time and effort investment (complexity); ROI concern is secondary"
+    },
+    {
+      "objection_id": 28,
+      "text": "Free tier only matters if it delivers immediate, visible value",
+      "auto": "general",
+      "human_primary": "complexity",
+      "human_secondary": "none",
+      "harmful": true,
+      "resonance_ratio": 1.8,
+      "confusion_note": "Classified as general but core complaint is about time-to-value and effort needed to see benefit (complexity)"
+    },
+    {
+      "objection_id": 37,
+      "text": "Wants transparency on data use and whether the app supports specific ethical brands or producers",
+      "auto": "ethics",
+      "human_primary": "privacy",
+      "human_secondary": "ethics",
+      "harmful": true,
+      "resonance_ratio": 1.8,
+      "confusion_note": "Classified as ethics but leading clause is about data use transparency (privacy); ethical brands is the secondary concern"
+    },
+    {
+      "objection_id": 36,
+      "text": "App positioning feels too utilitarian for someone who values premium brand identity",
+      "auto": "general",
+      "human_primary": "relevance",
+      "human_secondary": "none",
+      "harmful": false,
+      "resonance_ratio": 1.3,
+      "confusion_note": "Classified as general but core complaint is about poor lifestyle and brand fit for this persona (relevance)"
+    },
+    {
+      "objection_id": 56,
+      "text": "Concerned whether the AI recommendations will actually work for his specific budget constraints",
+      "auto": "general",
+      "human_primary": "relevance",
+      "human_secondary": "none",
+      "harmful": false,
+      "resonance_ratio": 1.3,
+      "confusion_note": "Classified as price due to budget keyword, but core complaint is whether the product fits his specific situation (relevance)"
+    },
+    {
+      "objection_id": 59,
+      "text": "Budget focus undermines the aspirational messaging that attracts brand buyers",
+      "auto": "general",
+      "human_primary": "relevance",
+      "human_secondary": "none",
+      "harmful": false,
+      "resonance_ratio": 1.3,
+      "confusion_note": "Classified as price due to budget keyword, but core complaint is about poor brand and lifestyle fit for this persona (relevance)"
+    }
+  ],
+  "pass_fail": {
+    "exact_accuracy": {
+      "value": 0.9,
+      "threshold": ">= 0.75",
+      "passed": true,
+      "label": "Exact accuracy >= 75%"
+    },
+    "harmful_misclassification_rate": {
+      "value": 0.07,
+      "threshold": "<= 0.1",
+      "passed": true,
+      "label": "Harmful misclassification <= 10%"
+    },
+    "general_fallback_rate": {
+      "value": 0.05,
+      "threshold": "<= 0.25",
+      "passed": true,
+      "label": "General fallback <= 25%"
+    }
+  }
+}

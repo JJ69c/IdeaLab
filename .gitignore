@@ -42,9 +42,8 @@ htmlcov/
 # Process documentation (internal evaluations, reports)
 process_doc/
 
-# Confidential docs
-docs/商业计划书.md
-docs/商业计划书.docx
-docs/投资预算表.md
-docs/投资预算表.docx
-docs/generate_docx.py
+# Binary docs (keep .md source only)
+*.docx
+
+# Confidential business docs
+docs/business/

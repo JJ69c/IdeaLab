@@ -21,7 +21,7 @@ You describe an idea
       Phase 6: Adoption (deterministic per-NPC barrier model)
   -> Convergence tracking classifies outcome
   -> LLM generates narrative report
-  -> Results streamed via SSE, persisted to SQLite
+  -> Results streamed via SSE, persisted to PostgreSQL
 ```
 
 ### Evaluation Pipeline
@@ -55,36 +55,49 @@ The deterministic components drive ~90% of outcomes. The LLM provides bounded qu
 
 - **Stratified seed selection** — Guarantees archetype coverage in the initial seed group
 - **Discussion uplift cap** (0.40) — Prevents hype cascades from overriding weak product fundamentals. Negative deltas flow freely.
-- **Concern propagation** — Low-interest NPCs dampen enthusiasm of peers. Source credibility matters. No objections required (low interest alone triggers sharing).
+- **Concern propagation** — Low-interest NPCs dampen enthusiasm of peers. Source credibility matters. No objections required (low interest alone triggers sharing). Content-aware: objection themes are classified (9 themes) and amplified/dampened by archetype-specific resonance multipliers.
+- **Prompt memory injection** — NPCs carry social memory (peer warnings, discussion history, objection themes) into LLM discussion prompts. An NPC who heard price concerns from a skeptic will naturally reference those concerns when discussing with others. Memory also surfaces in Ask NPC responses.
 - **Resistance floors** — Some archetypes are nearly immune to peer influence when the product is fundamentally wrong for them
 - **Exposure decay** — Diminishing returns on peer influence over time (except Social Followers, who get increasing social proof)
 
 ### Adoption Model
 
-Deterministic per-NPC computation:
+Deterministic per-NPC computation with per-archetype thresholds:
 ```
 adoption_score = interest_score x (1.0 - effective_barrier)
 effective_barrier = weighted sum of: trust_gap, clarity_gap, price_gap,
                     trial_gap, switching_gap, inertia_gap
-adopted = adoption_score >= 0.50 AND interest >= 0.30 AND aware
+adopted = adoption_score >= archetype_threshold AND interest >= 0.30 AND aware
           AND (free product OR would_pay)
 ```
+Archetype thresholds range from 0.55 (Trend Adopter) to 0.70 (Health Evaluator, Values Buyer), reflecting different risk tolerances.
+
+### Reliability
+
+- **LLM retry with exponential backoff** — API timeouts, rate limits, and malformed JSON trigger up to 3 retries with 1-8s delays before falling back
+- **Discussion cooldown on failure** — Failed LLM discussions still set pair cooldown to prevent retry-every-tick loops
+- **Simulation timeout** — Watchdog thread marks simulations as failed after 15 minutes, notifies SSE clients
+- **Event store cleanup** — Completed simulation events auto-purged from memory after 2 minutes (or immediately when SSE client disconnects). Prevents OOM on long-running servers.
+- **Calibrated constants** — Key propagation parameters (concern share base, delta multiplier, exposure decay, saturation damper) documented with sensitivity analysis ranges and rationale
+- **Input validation** — Cross-field constraint: seed_count cannot exceed population_size
+- **Stance band stability** — Band widths (0.12–0.20) sized so a typical discussion delta rarely flips more than one stance
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.9+, FastAPI, SQLAlchemy, Alembic |
+| Backend | Python 3.10+, FastAPI, SQLAlchemy 2.0, Alembic |
 | Frontend | React 18, TypeScript, Vite, TailwindCSS, Recharts |
-| Database | SQLite (events persisted for replay) |
+| Database | PostgreSQL 14+ (production), SQLite (dev fallback) |
 | AI | Claude API (Haiku for NPC reactions, Sonnet for reports) |
 
 ## Getting Started
 
 ### Prerequisites
 
-- Python 3.9+
+- Python 3.10+
 - Node.js 18+
+- PostgreSQL 14+ (or use SQLite for local dev)
 - Anthropic API key ([console.anthropic.com](https://console.anthropic.com))
 
 ### Setup
@@ -95,11 +108,16 @@ cd idealab
 
 # Environment
 cp .env.example .env
-# Edit .env and add: ANTHROPIC_API_KEY=sk-ant-your-key-here
+# Edit .env and add your ANTHROPIC_API_KEY
+
+# Create PostgreSQL database
+createdb idealab
+# Or use SQLite: set DATABASE_URL=sqlite+aiosqlite:///./idealab.db in .env
 
 # Backend
-pip install fastapi uvicorn sqlalchemy aiosqlite pydantic pydantic-settings anthropic
+pip install -r requirements.txt
 uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+# Alembic migrations run automatically on startup
 
 # Frontend (new terminal)
 cd frontend
@@ -123,10 +141,10 @@ Open **http://localhost:5173**.
 ```
 idealab/
 ├── backend/
-│   ├── api/                       # FastAPI routes and schemas
-│   ├── alembic/                   # Database migrations
-│   ├── db/                        # SQLAlchemy models
-│   ├── llm/                       # Claude API client and prompts
+│   ├── api/                       # FastAPI routes, schemas, JWT auth
+│   ├── alembic/                   # Database migrations (auto-run on startup)
+│   ├── db/                        # SQLAlchemy models (User, Simulation, Asset, Event)
+│   ├── llm/                       # Claude API client with retry, prompts
 │   ├── simulation/
 │   │   ├── engine.py              # Tick loop, seeding, discussion cap
 │   │   ├── evaluation.py          # Archetype baselines, individual deltas
@@ -143,6 +161,10 @@ idealab/
 ├── frontend/src/
 │   ├── pages/                     # Dashboard, Inject, LiveSimulation, Report, Compare
 │   └── components/                # Graph, metrics, NPC chat, event feed
+├── docs/
+│   ├── product/                   # PRD
+│   ├── technical/                 # Technical design, simulation foundation spec
+│   └── business/                  # Business plan, budget (gitignored)
 ├── data/
 │   ├── npc_templates/             # 8 archetypes, evaluation weights, presets
 │   └── known_products.json        # ~130 products for competition classification
@@ -169,12 +191,36 @@ Each simulation targets **under $0.15** in API costs:
 - Sonnet only for the final report (1 call)
 - Deterministic math for influence, spread, and adoption (no LLM)
 
+## Authentication
+
+JWT-based auth with bcrypt password hashing. Users only see their own simulations.
+
+```bash
+# Register
+curl -X POST http://localhost:8000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "alice", "email": "alice@example.com", "password": "secret123"}'
+# Returns: { "token": "eyJ...", "user_id": "...", "username": "alice" }
+
+# Login
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "alice", "password": "secret123"}'
+
+# Use token in subsequent requests
+curl -H "Authorization: Bearer eyJ..." http://localhost:8000/api/simulations
+```
+
+Auth is currently optional — unauthenticated requests still work but simulations won't be scoped to a user.
+
 ## API
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| `POST` | `/api/auth/register` | Create account (returns JWT) |
+| `POST` | `/api/auth/login` | Login (returns JWT) |
 | `POST` | `/api/simulations` | Create and run a simulation |
-| `GET` | `/api/simulations` | List past simulations |
+| `GET` | `/api/simulations` | List past simulations (filtered by user if auth'd) |
 | `GET` | `/api/simulations/{id}` | Get simulation details |
 | `GET` | `/api/simulations/{id}/stream` | SSE event stream (live or replay) |
 | `GET` | `/api/simulations/{id}/report` | Get structured report |

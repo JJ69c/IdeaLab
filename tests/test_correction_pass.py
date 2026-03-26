@@ -402,11 +402,11 @@ def test_concern_propagation():
     fired = False
     random.seed(42)
     for _ in range(100):
-        deltas = compute_concern_influence(world)
-        if deltas:
+        events = compute_concern_influence(world)
+        if events:
             fired = True
-            for tid, d in deltas:
-                total_deltas += d
+            for evt in events:
+                total_deltas += evt.final_delta
 
     check(
         "Concern propagation fires from skeptical NPC",

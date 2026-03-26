@@ -5,6 +5,76 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
+# ---------------------------------------------------------------------------
+# Social memory dataclasses — typed records of what an NPC has heard/experienced
+# ---------------------------------------------------------------------------
+# These replace untyped dict fields and enforce schema at write time.
+# Each has a bounded max count on NpcState to prevent unbounded growth.
+
+@dataclass(frozen=True, slots=True)
+class PeerWarning:
+    """A negative concern heard through concern propagation (Phase 4b).
+
+    Source is always an NPC with low interest who shared negativity.
+    Distinct from discussion memories — this is passive negative influence.
+    """
+    tick: int
+    source_id: str
+    source_name: str
+    source_archetype: str  # UX-only: helps prompt injection, not used in math
+    theme: str             # from resonance.classify_objection_theme
+    content: str           # the objection text that triggered the concern
+    delta: float           # the interest change applied to the target
+
+
+@dataclass(frozen=True, slots=True)
+class DiscussionMemory:
+    """Record of a two-way discussion this NPC participated in (Phase 3)."""
+    tick: int
+    partner_id: str
+    partner_name: str
+    key_point: str     # most important thing said (from LLM)
+    my_delta: float    # how this NPC's interest changed
+
+
+@dataclass(frozen=True, slots=True)
+class ImpactfulExchange:
+    """The single most impactful social exchange this NPC experienced.
+
+    Tracked as "what moved me most" — dominated by speaker's social power
+    and trust, not argument quality. Named to reflect this honestly.
+    """
+    tick: int
+    source_id: str
+    source_name: str
+    content: str       # the key_point or objection text
+    delta: float       # the interest change (positive or negative)
+    theme: str         # classified theme of the content
+
+
+@dataclass(frozen=True, slots=True)
+class ConcernEvent:
+    """Structured output from compute_concern_influence.
+
+    Preserves source attribution so engine.py can write PeerWarning
+    memory on the target without propagation.py mutating NPC state.
+    """
+    target_id: str
+    source_id: str
+    source_name: str
+    source_archetype: str
+    raw_delta: float         # delta before resonance
+    resonance: float         # archetype-theme resonance multiplier
+    final_delta: float       # raw_delta * resonance (clamped)
+    theme: str               # classified theme driving this concern
+    objection_content: str   # source's top objection text (for memory)
+
+
+# Max items stored per memory type on NpcState
+MAX_PEER_WARNINGS = 5
+MAX_DISCUSSION_MEMORIES = 3
+
+
 # Ordered states for the UI legend and color mapping
 STANCES = [
     "unaware", "aware",
@@ -13,9 +83,9 @@ STANCES = [
 ]
 
 # Interest score threshold for recommending the product to others.
-# 0.68 = solidly interested; low enough that strong products can spread
-# through discussions, high enough that mediocre products need real uplift.
-RECOMMEND_THRESHOLD = 0.68
+# 0.72 = solidly in willing_to_try band; low enough that strong products
+# spread through discussions, high enough that mediocre products need uplift.
+RECOMMEND_THRESHOLD = 0.72
 
 
 def derive_stance(interest_score: float, would_pay: bool, aware: bool) -> str:
@@ -23,20 +93,24 @@ def derive_stance(interest_score: float, would_pay: bool, aware: bool) -> str:
 
     The interest_score is the single source of truth.
     would_pay (from LLM) unlocks the highest tier.
+
+    Band widths are chosen so a single discussion delta (typically ±0.05–0.10)
+    rarely flips more than one band.  The middle bands (curious, interested)
+    are wider (~0.20) to absorb normal discussion variance.
     """
     if not aware:
         return "unaware"
-    if interest_score >= 0.85 and would_pay:
+    if interest_score >= 0.82 and would_pay:
         return "willing_to_pay"
-    if interest_score >= 0.75:
+    if interest_score >= 0.70:
         return "willing_to_try"
-    if interest_score >= 0.60:
+    if interest_score >= 0.50:
         return "interested"
-    if interest_score >= 0.45:
+    if interest_score >= 0.32:
         return "curious"
-    if interest_score >= 0.30:
+    if interest_score >= 0.18:
         return "indifferent"
-    if interest_score >= 0.15:
+    if interest_score >= 0.08:
         return "skeptical"
     return "opposed"
 
@@ -83,6 +157,12 @@ class NpcState:
     exposure_count: int = 0  # ticks since becoming aware (incremented each tick)
     discussion_partners: set = field(default_factory=set)  # NPC IDs discussed with
 
+    # Social memory (Phase 1 hybrid upgrades)
+    peer_warnings: list[PeerWarning] = field(default_factory=list)
+    discussion_memories: list[DiscussionMemory] = field(default_factory=list)
+    most_impactful: ImpactfulExchange | None = None
+    objection_themes: list[str] = field(default_factory=list)  # classified once during apply_reaction
+
     def increment_exposure(self):
         """Increment exposure counter for aware NPCs. Called once per tick."""
         if self.aware:
@@ -107,6 +187,10 @@ class NpcState:
         self.would_recommend = reaction.get("would_recommend", False)
         self.emotional_reaction = reaction.get("emotional_reaction", "meh")
 
+        # Classify objection themes once (avoids re-classification every tick)
+        from backend.simulation.resonance import classify_objection_themes
+        self.objection_themes = classify_objection_themes(self.objections)
+
         old_stance = self.stance
         self.stance = derive_stance(self.interest_score, self.would_pay, self.aware)
         self.events.append(
@@ -117,7 +201,12 @@ class NpcState:
         return self.stance if self.stance != old_stance else None
 
     def apply_discussion_outcome(
-        self, delta: float, tick: int, partner_id: str
+        self,
+        delta: float,
+        tick: int,
+        partner_id: str,
+        partner_name: str = "",
+        key_point: str = "",
     ) -> str | None:
         """Apply discussion result. Returns new stance if it changed."""
         old_stance = self.stance
@@ -127,6 +216,10 @@ class NpcState:
         if partner_id not in self.influence_sources:
             self.influence_sources.append(partner_id)
         self.discussion_partners.add(partner_id)
+
+        # Record discussion memory
+        if key_point:
+            self.record_discussion(tick, partner_id, partner_name, key_point, delta)
 
         self.events.append(
             {"tick": tick, "type": "discussed", "with": partner_id,
@@ -149,6 +242,44 @@ class NpcState:
         )
         self._record_history(tick)
         return self.stance if self.stance != old_stance else None
+
+    def record_peer_warning(self, warning: PeerWarning) -> None:
+        """Record a concern heard through concern propagation."""
+        self.peer_warnings.append(warning)
+        if len(self.peer_warnings) > MAX_PEER_WARNINGS:
+            self.peer_warnings = self.peer_warnings[-MAX_PEER_WARNINGS:]
+        self._update_most_impactful(
+            warning.tick, warning.source_id, warning.source_name,
+            warning.content, warning.delta, warning.theme,
+        )
+
+    def record_discussion(
+        self, tick: int, partner_id: str, partner_name: str,
+        key_point: str, my_delta: float,
+    ) -> None:
+        """Record a discussion memory."""
+        mem = DiscussionMemory(
+            tick=tick, partner_id=partner_id, partner_name=partner_name,
+            key_point=key_point, my_delta=my_delta,
+        )
+        self.discussion_memories.append(mem)
+        if len(self.discussion_memories) > MAX_DISCUSSION_MEMORIES:
+            self.discussion_memories = self.discussion_memories[-MAX_DISCUSSION_MEMORIES:]
+        self._update_most_impactful(
+            tick, partner_id, partner_name, key_point, my_delta,
+            theme="",  # theme not classified here; discussion resonance is Phase 4
+        )
+
+    def _update_most_impactful(
+        self, tick: int, source_id: str, source_name: str,
+        content: str, delta: float, theme: str,
+    ) -> None:
+        """Update the most impactful exchange if this one is larger."""
+        if self.most_impactful is None or abs(delta) > abs(self.most_impactful.delta):
+            self.most_impactful = ImpactfulExchange(
+                tick=tick, source_id=source_id, source_name=source_name,
+                content=content, delta=delta, theme=theme,
+            )
 
     def update_would_recommend(self):
         """Re-derive would_recommend from current interest_score.
