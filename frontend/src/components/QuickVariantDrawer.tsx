@@ -35,6 +35,7 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
     population_size: config.population_size ?? 30,
   })
   const [variantName, setVariantName] = useState('')
+  const [useParentSeeds, setUseParentSeeds] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -67,6 +68,7 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
         },
         parent_simulation_id: parentSimulation.id,
         variant_name: variantName.trim() || undefined,
+        use_parent_seeds: useParentSeeds,
         asset_refs: [],
       }
 
@@ -130,6 +132,49 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
               value={variantName}
               onChange={e => setVariantName(e.target.value)}
             />
+          </div>
+
+          {/* Seed Population Mode */}
+          <div>
+            <label className="block text-[10px] font-bold text-outline uppercase tracking-widest mb-2">
+              Starting Exposure
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setUseParentSeeds(false)}
+                className={`flex flex-col items-start gap-1 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                  !useParentSeeds
+                    ? 'border-primary/40 bg-primary/5 ring-1 ring-primary/20'
+                    : 'border-outline-variant/30 hover:border-outline-variant/50'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
+                  <span className="material-symbols-outlined text-[14px]">shuffle</span>
+                  Fresh seeds
+                </span>
+                <span className="text-[10px] text-outline leading-snug">
+                  Re-select who hears first — adds realistic variance
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setUseParentSeeds(true)}
+                className={`flex flex-col items-start gap-1 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                  useParentSeeds
+                    ? 'border-primary/40 bg-primary/5 ring-1 ring-primary/20'
+                    : 'border-outline-variant/30 hover:border-outline-variant/50'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
+                  <span className="material-symbols-outlined text-[14px]">lock</span>
+                  Same seeds
+                </span>
+                <span className="text-[10px] text-outline leading-snug">
+                  Fix who hears first — isolates the product change
+                </span>
+              </button>
+            </div>
           </div>
 
           <div className="border-t border-outline-variant/20 pt-4" />

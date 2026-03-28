@@ -64,3 +64,12 @@ class CreateSimulationRequest(BaseModel):
     variant_name: str | None = Field(
         default=None, max_length=200, description="Label for this variant (e.g. 'Lower price test')"
     )
+    use_parent_seeds: bool = Field(
+        default=False,
+        description=(
+            "If True, the variant uses the same initial seed NPCs as the parent "
+            "(same 8 people exposed first), giving a controlled A/B comparison. "
+            "If False, seeds are re-selected via stratified sampling (different first-exposure). "
+            "Ignored when parent_simulation_id is not set."
+        ),
+    )

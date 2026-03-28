@@ -54,6 +54,7 @@ def create_world(
     preset: str = "balanced",
     asset_signals: AssetSignals | None = None,
     population_override: list[dict] | None = None,
+    seed_override: list[str] | None = None,
 ) -> WorldState:
     """Initialize a world with a population, injected idea, and product profile.
 
@@ -91,6 +92,10 @@ def create_world(
         npcs={npc.id: npc for npc in npcs},
     )
     world.npc_archetypes = npc_archetypes
+    # Seed override: fixed NPC IDs to use as the initial exposed group.
+    # When set, _run_tick skips stratified sampling on tick 1 and exposes
+    # exactly these NPCs. Any IDs not found in world.npcs are silently skipped.
+    world._seed_override: list[str] | None = seed_override
 
     # Classify alternatives into structured competition context
     competition_context = None
@@ -120,6 +125,7 @@ def run_simulation(
     emit: EventCallback | None = None,
     asset_signals: AssetSignals | None = None,
     population_override: list[dict] | None = None,
+    seed_override: list[str] | None = None,
 ) -> dict:
     """Run a full simulation, emitting events for live streaming.
 
@@ -130,9 +136,16 @@ def run_simulation(
               If None, events are only logged.
         asset_signals: Optional structured signals from reference assets.
         population_override: Saved NPC data from a parent simulation (for variants).
+        seed_override: NPC IDs to use as the tick-1 seeds instead of stratified
+                       sampling. Used when use_parent_seeds=True on a variant.
     """
     emit = emit or _noop
-    world = create_world(idea, config, asset_signals=asset_signals, population_override=population_override)
+    world = create_world(
+        idea, config,
+        asset_signals=asset_signals,
+        population_override=population_override,
+        seed_override=seed_override,
+    )
     tracker = ConvergenceTracker()
 
     # Build edge list for the frontend graph
@@ -273,9 +286,22 @@ def _run_tick(world: WorldState, tick: int, emit: EventCallback):
     if tick == 1:
         all_npcs = list(world.npcs.values())
         seed_count = min(world.config.seed_count, len(all_npcs))
-        seeds = _stratified_seed_selection(
-            all_npcs, seed_count, npc_archetypes=world.npc_archetypes
-        )
+        _override_ids = getattr(world, "_seed_override", None)
+        if _override_ids:
+            # Fixed seeds: use the exact NPC IDs from the parent simulation.
+            # Skip any IDs that don't exist in this world (defensive).
+            seeds = [world.npcs[nid] for nid in _override_ids if nid in world.npcs]
+            if not seeds:
+                logger.warning("seed_override produced 0 valid seeds — falling back to stratified")
+                seeds = _stratified_seed_selection(all_npcs, seed_count, npc_archetypes=world.npc_archetypes)
+            elif len(seeds) < seed_count:
+                logger.info(
+                    "seed_override: %d/%d IDs matched, using those only", len(seeds), seed_count
+                )
+        else:
+            seeds = _stratified_seed_selection(
+                all_npcs, seed_count, npc_archetypes=world.npc_archetypes
+            )
         for npc in seeds:
             npc.state.become_aware(tick, source="direct_exposure")
             world.log_event(tick, npc.id, "became_aware", {"source": "direct_exposure"})

@@ -145,6 +145,7 @@ async def create_simulation(
     _launch_with_timeout(
         sim_id, idea, config, asset_file_paths, asset_metadata,
         parent_simulation_id=request.parent_simulation_id,
+        use_parent_seeds=bool(request.parent_simulation_id and request.use_parent_seeds),
     )
 
     return SimulationDetail(
@@ -229,6 +230,32 @@ def _load_parent_population(db_session, parent_simulation_id: str) -> list[dict]
     return npcs
 
 
+def _load_parent_seed_ids(db_session, parent_simulation_id: str) -> list[str] | None:
+    """Return the NPC IDs that were the initial seeds in the parent simulation.
+
+    Reads npc_aware events from tick 1. Returns None if no seed events found
+    (caller should fall back to stratified sampling).
+    """
+    from sqlalchemy import select as sa_select
+    stmt = sa_select(SimulationEvent).where(
+        SimulationEvent.simulation_id == parent_simulation_id,
+        SimulationEvent.event_type == "npc_aware",
+        SimulationEvent.tick == 1,
+    ).order_by(SimulationEvent.id)
+    events = db_session.execute(stmt).scalars().all()
+    ids = []
+    for ev in events:
+        d = ev.data.get("data", ev.data)
+        nid = d.get("npc_id") or ev.npc_id
+        if nid:
+            ids.append(nid)
+    if not ids:
+        logger.warning("No tick-1 npc_aware events found for parent %s", parent_simulation_id)
+        return None
+    logger.info("Loaded %d seed IDs from parent %s", len(ids), parent_simulation_id)
+    return ids
+
+
 def _launch_with_timeout(
     sim_id: str,
     idea: InjectedIdea,
@@ -236,6 +263,7 @@ def _launch_with_timeout(
     asset_file_paths: list[str] | None = None,
     asset_metadata: list[dict] | None = None,
     parent_simulation_id: str | None = None,
+    use_parent_seeds: bool = False,
 ):
     """Launch the simulation thread and a watchdog that enforces a timeout.
 
@@ -269,7 +297,7 @@ def _launch_with_timeout(
 
     worker = threading.Thread(
         target=_run_simulation_thread,
-        args=(sim_id, idea, config, asset_file_paths, asset_metadata, parent_simulation_id),
+        args=(sim_id, idea, config, asset_file_paths, asset_metadata, parent_simulation_id, use_parent_seeds),
         daemon=True,
     )
     worker.start()
@@ -285,6 +313,7 @@ def _run_simulation_thread(
     asset_file_paths: list[str] | None = None,
     asset_metadata: list[dict] | None = None,
     parent_simulation_id: str | None = None,
+    use_parent_seeds: bool = False,
 ):
     """Run the simulation in a background thread.
 
@@ -329,10 +358,16 @@ def _run_simulation_thread(
 
         # For variants: reuse parent's NPC population for fair comparison
         population_override = None
+        seed_override = None
         if parent_simulation_id:
             population_override = _load_parent_population(db_session, parent_simulation_id)
+            if use_parent_seeds:
+                seed_override = _load_parent_seed_ids(db_session, parent_simulation_id)
 
-        report = run_simulation(idea, config, emit=emit, asset_signals=asset_signals, population_override=population_override)
+        report = run_simulation(
+            idea, config, emit=emit, asset_signals=asset_signals,
+            population_override=population_override, seed_override=seed_override,
+        )
 
         # Final commit for any unflushed events
         db_session.commit()
