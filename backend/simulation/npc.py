@@ -83,9 +83,9 @@ STANCES = [
 ]
 
 # Interest score threshold for recommending the product to others.
-# 0.72 = solidly in willing_to_try band; low enough that strong products
-# spread through discussions, high enough that mediocre products need uplift.
-RECOMMEND_THRESHOLD = 0.72
+# 0.68 = calibrated so strong products spread through discussions,
+# high enough that mediocre products need uplift. (Calibrated 2026-03-23)
+RECOMMEND_THRESHOLD = 0.68
 
 
 def derive_stance(interest_score: float, would_pay: bool, aware: bool) -> str:
@@ -96,21 +96,21 @@ def derive_stance(interest_score: float, would_pay: bool, aware: bool) -> str:
 
     Band widths are chosen so a single discussion delta (typically ±0.05–0.10)
     rarely flips more than one band.  The middle bands (curious, interested)
-    are wider (~0.20) to absorb normal discussion variance.
+    are wider (~0.15) to absorb normal discussion variance.
     """
     if not aware:
         return "unaware"
-    if interest_score >= 0.82 and would_pay:
+    if interest_score >= 0.85 and would_pay:
         return "willing_to_pay"
-    if interest_score >= 0.70:
+    if interest_score >= 0.75:
         return "willing_to_try"
-    if interest_score >= 0.50:
+    if interest_score >= 0.60:
         return "interested"
-    if interest_score >= 0.32:
+    if interest_score >= 0.45:
         return "curious"
-    if interest_score >= 0.18:
+    if interest_score >= 0.30:
         return "indifferent"
-    if interest_score >= 0.08:
+    if interest_score >= 0.15:
         return "skeptical"
     return "opposed"
 
@@ -356,6 +356,8 @@ class Npc:
             communication_style=d.get("communication_style", "neutral"),
             social_connections=d.get("social_connections", []),
             trust_weights=d.get("trust_weights", {}),
+            archetype=d.get("archetype"),
+            decision_style=d.get("decision_style", ""),
         )
 
     def to_profile_dict(self) -> dict:

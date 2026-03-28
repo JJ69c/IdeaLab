@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Simulation defaults
     default_num_ticks: int = 8
     default_population_size: int = 30
-    default_seed_count: int = 5
+    default_seed_count: int = 8
     max_discussions_per_tick: int = 5
     reaction_batch_size: int = 6
 

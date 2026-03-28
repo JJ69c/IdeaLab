@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.auth import get_optional_user
@@ -142,7 +142,10 @@ async def create_simulation(
     event_store.register(sim_id)
 
     # Launch simulation in a background thread with a timeout watchdog
-    _launch_with_timeout(sim_id, idea, config, asset_file_paths, asset_metadata)
+    _launch_with_timeout(
+        sim_id, idea, config, asset_file_paths, asset_metadata,
+        parent_simulation_id=request.parent_simulation_id,
+    )
 
     return SimulationDetail(
         id=record.id,
@@ -200,12 +203,39 @@ def _compute_changed_fields(
     return changed
 
 
+def _load_parent_population(db_session, parent_simulation_id: str) -> list[dict] | None:
+    """Load the NPC population from a parent simulation's start event.
+
+    Returns the NPC init dicts so the variant can recreate the exact same
+    population, ensuring a fair apples-to-apples comparison.
+    """
+    stmt = select(SimulationEvent).where(
+        SimulationEvent.simulation_id == parent_simulation_id,
+        SimulationEvent.event_type == "simulation_start",
+    ).limit(1)
+    event = db_session.execute(stmt).scalar_one_or_none()
+
+    if not event:
+        logger.warning("No simulation_start event found for parent %s", parent_simulation_id)
+        return None
+
+    data = event.data.get("data", {})
+    npcs = data.get("npcs", [])
+    if not npcs:
+        logger.warning("Parent %s has no NPC data in simulation_start event", parent_simulation_id)
+        return None
+
+    logger.info("Loaded %d NPCs from parent simulation %s", len(npcs), parent_simulation_id)
+    return npcs
+
+
 def _launch_with_timeout(
     sim_id: str,
     idea: InjectedIdea,
     config: SimConfig,
     asset_file_paths: list[str] | None = None,
     asset_metadata: list[dict] | None = None,
+    parent_simulation_id: str | None = None,
 ):
     """Launch the simulation thread and a watchdog that enforces a timeout.
 
@@ -239,7 +269,7 @@ def _launch_with_timeout(
 
     worker = threading.Thread(
         target=_run_simulation_thread,
-        args=(sim_id, idea, config, asset_file_paths, asset_metadata),
+        args=(sim_id, idea, config, asset_file_paths, asset_metadata, parent_simulation_id),
         daemon=True,
     )
     worker.start()
@@ -254,6 +284,7 @@ def _run_simulation_thread(
     config: SimConfig,
     asset_file_paths: list[str] | None = None,
     asset_metadata: list[dict] | None = None,
+    parent_simulation_id: str | None = None,
 ):
     """Run the simulation in a background thread.
 
@@ -296,7 +327,12 @@ def _run_simulation_thread(
             if asset_signals:
                 logger.info("Asset signals: %s", asset_signals.to_dict())
 
-        report = run_simulation(idea, config, emit=emit, asset_signals=asset_signals)
+        # For variants: reuse parent's NPC population for fair comparison
+        population_override = None
+        if parent_simulation_id:
+            population_override = _load_parent_population(db_session, parent_simulation_id)
+
+        report = run_simulation(idea, config, emit=emit, asset_signals=asset_signals, population_override=population_override)
 
         # Final commit for any unflushed events
         db_session.commit()
@@ -1045,3 +1081,31 @@ async def _gather_npc_context(
         "discussions": discussions,
         "peer_warnings": peer_warnings,
     }
+
+
+# ---------------------------------------------------------------------------
+# DELETE — Remove a simulation and all its events
+# ---------------------------------------------------------------------------
+
+@router.delete("/{simulation_id}")
+async def delete_simulation(
+    simulation_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str | None = Depends(get_optional_user),
+):
+    """Delete a simulation and all associated events."""
+    result = await db.execute(
+        select(SimulationRecord).where(SimulationRecord.id == simulation_id)
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+
+    # Delete events first (foreign key dependency)
+    await db.execute(
+        delete(SimulationEvent).where(SimulationEvent.simulation_id == simulation_id)
+    )
+    await db.delete(record)
+    await db.commit()
+
+    return {"ok": True}

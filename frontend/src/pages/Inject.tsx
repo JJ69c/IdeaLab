@@ -305,7 +305,7 @@ export default function Inject() {
     known_risks: '',
     num_ticks: 8,
     population_size: 30,
-    seed_count: 5,
+    seed_count: 8,
   })
 
   const update = (field: string, value: string | number) =>
@@ -341,7 +341,7 @@ export default function Inject() {
           known_risks: meta.known_risks || '',
           num_ticks: config.num_ticks ?? 8,
           population_size: config.population_size ?? 30,
-          seed_count: config.seed_count ?? 5,
+          seed_count: config.seed_count ?? 8,
         })
         setPrefilling(false)
       })

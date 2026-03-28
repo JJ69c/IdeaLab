@@ -63,6 +63,7 @@ function formatDate(dateStr: string): string {
 export default function Dashboard() {
   const [sims, setSims] = useState<SimSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/simulations')
@@ -70,6 +71,21 @@ export default function Dashboard() {
       .then(data => { setSims(data); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!confirm('Delete this simulation? This cannot be undone.')) return
+    setDeleting(id)
+    try {
+      const res = await fetch(`/api/simulations/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setSims(prev => prev.filter(s => s.id !== id))
+      }
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   // Build a lookup of sim id → title so variants can show their parent's name
   const titleMap: Record<string, string> = {}
@@ -154,8 +170,15 @@ export default function Dashboard() {
                         </span>
                       )}
                     </div>
-                    <button className="text-outline-variant hover:text-on-surface transition-colors opacity-0 group-hover:opacity-100">
-                      <span className="material-symbols-outlined text-[20px]">more_vert</span>
+                    <button
+                      onClick={(e) => handleDelete(sim.id, e)}
+                      disabled={deleting === sim.id}
+                      className="text-outline-variant hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                      title="Delete simulation"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">
+                        {deleting === sim.id ? 'hourglass_empty' : 'delete'}
+                      </span>
                     </button>
                   </div>
 

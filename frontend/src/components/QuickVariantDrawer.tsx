@@ -63,7 +63,7 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
         config: {
           num_ticks: form.num_ticks,
           population_size: form.population_size,
-          seed_count: config.seed_count ?? 5,
+          seed_count: config.seed_count ?? 8,
         },
         parent_simulation_id: parentSimulation.id,
         variant_name: variantName.trim() || undefined,

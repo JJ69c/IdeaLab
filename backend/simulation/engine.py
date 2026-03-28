@@ -48,21 +48,34 @@ def create_world(
     config: SimConfig,
     preset: str = "balanced",
     asset_signals: AssetSignals | None = None,
+    population_override: list[dict] | None = None,
 ) -> WorldState:
     """Initialize a world with a population, injected idea, and product profile.
 
     Uses the archetype-based population generator by default. Falls back to
     the legacy JSON population if the generator fails.
+
+    When population_override is provided (for variants), recreates the exact
+    same NPCs instead of generating a new random population.
     """
-    try:
-        npcs, npc_archetypes = generate_population(
-            size=config.population_size,
-            preset=preset,
-        )
-    except Exception:
-        logger.warning("Population generator failed, falling back to legacy JSON", exc_info=True)
-        npcs = load_population(limit=config.population_size)
-        npc_archetypes = {}
+    if population_override:
+        npcs = [Npc.from_dict(d) for d in population_override]
+        npc_archetypes = {
+            d["id"]: d["archetype"]
+            for d in population_override
+            if d.get("archetype")
+        }
+        logger.info("Restored population from parent: %d NPCs", len(npcs))
+    else:
+        try:
+            npcs, npc_archetypes = generate_population(
+                size=config.population_size,
+                preset=preset,
+            )
+        except Exception:
+            logger.warning("Population generator failed, falling back to legacy JSON", exc_info=True)
+            npcs = load_population(limit=config.population_size)
+            npc_archetypes = {}
 
     for npc in npcs:
         npc.reset_state()
@@ -101,6 +114,7 @@ def run_simulation(
     config: SimConfig,
     emit: EventCallback | None = None,
     asset_signals: AssetSignals | None = None,
+    population_override: list[dict] | None = None,
 ) -> dict:
     """Run a full simulation, emitting events for live streaming.
 
@@ -110,9 +124,10 @@ def run_simulation(
         emit: Optional callback invoked for each event (for SSE streaming).
               If None, events are only logged.
         asset_signals: Optional structured signals from reference assets.
+        population_override: Saved NPC data from a parent simulation (for variants).
     """
     emit = emit or _noop
-    world = create_world(idea, config, asset_signals=asset_signals)
+    world = create_world(idea, config, asset_signals=asset_signals, population_override=population_override)
     tracker = ConvergenceTracker()
 
     # Build edge list for the frontend graph
