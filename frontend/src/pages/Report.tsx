@@ -76,6 +76,7 @@ export default function Report() {
   const [variants, setVariants] = useState<VariantSummary[]>([])
   const [parentTitle, setParentTitle] = useState<string | null>(null)
   const [quickVariantOpen, setQuickVariantOpen] = useState(false)
+  const [seedIds, setSeedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (!id) return
@@ -97,6 +98,22 @@ export default function Report() {
     fetch(`/api/simulations/${id}/variants`)
       .then(r => r.json())
       .then(data => setVariants(data))
+      .catch(() => {})
+    // Fetch initial seed NPCs (npc_aware events on tick 1)
+    fetch(`/api/simulations/${id}/events?tick=1`)
+      .then(r => r.json())
+      .then((events: { event_type: string; npc_id: string | null; data: Record<string, unknown> }[]) => {
+        const ids = new Set<string>()
+        for (const ev of events) {
+          if (ev.event_type === 'npc_aware') {
+            const d = (ev.data as Record<string, unknown>)
+            const inner = (d.data ?? d) as Record<string, unknown>
+            const nid = (inner.npc_id as string) ?? ev.npc_id
+            if (nid) ids.add(nid)
+          }
+        }
+        setSeedIds(ids)
+      })
       .catch(() => {})
   }, [id])
 
@@ -350,15 +367,28 @@ export default function Report() {
       {/* Individual NPC Results */}
       <section className="bg-white rounded-lg border p-6">
         <h2 className="text-lg font-semibold mb-4">Individual Reactions</h2>
+        {seedIds.size > 0 && (
+          <p className="text-xs text-gray-400 mb-3 flex items-center gap-1">
+            <span className="inline-block w-2 h-2 rounded-full bg-blue-400"></span>
+            Blue border = initial seed NPC (exposed on tick 1)
+          </p>
+        )}
         <div className="space-y-3">
           {npc_results
             .sort((a, b) => b.interest_score - a.interest_score)
-            .map(npc => (
-            <div key={npc.npc_id} className="border rounded-lg p-3">
+            .map(npc => {
+            const isSeed = seedIds.has(npc.npc_id)
+            return (
+            <div key={npc.npc_id} className={`rounded-lg p-3 ${isSeed ? 'border-2 border-blue-300 bg-blue-50/30' : 'border'}`}>
               <div className="flex justify-between items-start">
-                <div>
+                <div className="flex items-center gap-2">
+                  {isSeed && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                      seed
+                    </span>
+                  )}
                   <span className="font-medium">{npc.name}</span>
-                  <span className="text-gray-400 text-sm ml-2">{npc.occupation}, {npc.age}</span>
+                  <span className="text-gray-400 text-sm">{npc.occupation}, {npc.age}</span>
                 </div>
                 <div className="flex gap-2 items-center">
                   {npc.adopted !== undefined && (
@@ -401,7 +431,8 @@ export default function Report() {
                 </div>
               )}
             </div>
-          ))}
+            )
+          })}
         </div>
       </section>
 

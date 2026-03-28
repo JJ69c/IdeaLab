@@ -43,6 +43,12 @@ interface ArchetypeEntry {
   dominant_stance_variant?: string
 }
 
+interface SeedNpc {
+  npc_id: string
+  name: string
+  archetype: string | null
+}
+
 interface CompareData {
   parent: {
     id: string
@@ -75,6 +81,9 @@ interface CompareData {
     parent_convergence: ConvergenceData | null
     variant_convergence: ConvergenceData | null
     archetype_comparison: ArchetypeEntry[]
+    parent_initial_seeds: SeedNpc[]
+    variant_initial_seeds: SeedNpc[]
+    population_match: boolean
   }
 }
 
@@ -324,6 +333,70 @@ export default function Compare() {
           })}
         </div>
       </section>
+
+      {/* Population Verification */}
+      {(data.diff.parent_initial_seeds.length > 0 || data.diff.variant_initial_seeds.length > 0) && (
+        <section className="glass-panel rounded-3xl border border-white/40 p-6">
+          <SectionHeader icon="groups_3" title="Initial Population" />
+          <div className="flex items-center gap-2 mb-5">
+            {data.diff.population_match ? (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 px-3 py-1 rounded-lg">
+                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                Same 30 NPCs — population reuse confirmed
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 px-3 py-1 rounded-lg">
+                <span className="material-symbols-outlined text-[14px]">warning</span>
+                Different NPC populations — not a fair comparison
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-outline mb-4">
+            Seeds are the NPCs made aware on tick 1. Same population but different seeds is expected — the variant runs fresh with the same market.
+          </p>
+          <SideBySideHeader />
+          <div className="grid grid-cols-2 gap-6">
+            {[
+              { label: 'Original', seeds: data.diff.parent_initial_seeds },
+              { label: 'Variant', seeds: data.diff.variant_initial_seeds },
+            ].map(({ label, seeds }) => {
+              const otherSeeds = label === 'Original'
+                ? data.diff.variant_initial_seeds
+                : data.diff.parent_initial_seeds
+              const otherIds = new Set(otherSeeds.map(s => s.npc_id))
+              return (
+                <div key={label} className="space-y-2">
+                  {seeds.length === 0 && (
+                    <p className="text-sm text-outline">No seed data</p>
+                  )}
+                  {seeds.map(seed => {
+                    const shared = otherIds.has(seed.npc_id)
+                    return (
+                      <div key={seed.npc_id} className={`flex items-center justify-between rounded-xl px-3 py-2 border text-sm ${
+                        shared
+                          ? 'bg-blue-50 border-blue-200'
+                          : 'bg-surface-container-lowest border-outline-variant/20'
+                      }`}>
+                        <div className="flex items-center gap-2">
+                          {shared && (
+                            <span className="material-symbols-outlined text-[14px] text-blue-500">sync</span>
+                          )}
+                          <span className="font-medium text-on-surface">{seed.name}</span>
+                        </div>
+                        {seed.archetype && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-outline bg-surface-container px-2 py-0.5 rounded">
+                            {seed.archetype.replace(/_/g, ' ')}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Adoption Breakdown Comparison */}
       {(pAdoption || vAdoption) && (

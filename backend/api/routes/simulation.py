@@ -696,6 +696,77 @@ def _build_archetype_comparison(
     return comparison
 
 
+async def _get_initial_seeds(db: AsyncSession, simulation_id: str) -> list[dict]:
+    """Return the NPCs that were made aware on tick 1 (initial seeds).
+
+    Each entry: {npc_id, name, archetype}. Name and archetype are looked up
+    from the simulation_start event's NPC roster.
+    """
+    # Get NPC IDs from npc_aware events on tick 1
+    aware_result = await db.execute(
+        select(SimulationEvent)
+        .where(
+            SimulationEvent.simulation_id == simulation_id,
+            SimulationEvent.event_type == "npc_aware",
+            SimulationEvent.tick == 1,
+        )
+        .order_by(SimulationEvent.id)
+    )
+    aware_events = aware_result.scalars().all()
+    seed_ids = []
+    for ev in aware_events:
+        d = ev.data.get("data", ev.data)
+        nid = d.get("npc_id") or ev.npc_id
+        if nid:
+            seed_ids.append(nid)
+
+    if not seed_ids:
+        return []
+
+    # Look up name + archetype from the simulation_start roster
+    start_result = await db.execute(
+        select(SimulationEvent)
+        .where(
+            SimulationEvent.simulation_id == simulation_id,
+            SimulationEvent.event_type == "simulation_start",
+        )
+        .limit(1)
+    )
+    start_ev = start_result.scalar_one_or_none()
+    npc_map: dict[str, dict] = {}
+    if start_ev:
+        inner = start_ev.data.get("data", start_ev.data)
+        for npc in inner.get("npcs", []):
+            npc_map[npc["id"]] = npc
+
+    seeds = []
+    for nid in seed_ids:
+        npc = npc_map.get(nid, {})
+        seeds.append({
+            "npc_id": nid,
+            "name": npc.get("name", nid),
+            "archetype": npc.get("archetype"),
+        })
+    return seeds
+
+
+async def _get_population_npc_ids(db: AsyncSession, simulation_id: str) -> set[str]:
+    """Return the full set of NPC IDs from a simulation's start event."""
+    result = await db.execute(
+        select(SimulationEvent)
+        .where(
+            SimulationEvent.simulation_id == simulation_id,
+            SimulationEvent.event_type == "simulation_start",
+        )
+        .limit(1)
+    )
+    ev = result.scalar_one_or_none()
+    if not ev:
+        return set()
+    inner = ev.data.get("data", ev.data)
+    return {npc["id"] for npc in inner.get("npcs", [])}
+
+
 @router.get("/{simulation_id}/compare/{variant_id}")
 async def compare_simulations(
     simulation_id: str,
@@ -721,6 +792,15 @@ async def compare_simulations(
         raise HTTPException(
             status_code=400, detail="Variant does not belong to this parent"
         )
+
+    # Fetch initial seeds and population match
+    parent_seeds = await _get_initial_seeds(db, simulation_id)
+    variant_seeds = await _get_initial_seeds(db, variant_id)
+    parent_pop_ids = await _get_population_npc_ids(db, simulation_id)
+    variant_pop_ids = await _get_population_npc_ids(db, variant_id)
+    population_match = bool(
+        parent_pop_ids and variant_pop_ids and parent_pop_ids == variant_pop_ids
+    )
 
     # Compute metrics delta
     parent_metrics = parent.metrics or {}
@@ -796,6 +876,9 @@ async def compare_simulations(
             "parent_adoption_breakdown": parent_report.get("adoption_breakdown"),
             "variant_adoption_breakdown": variant_report.get("adoption_breakdown"),
             "archetype_comparison": archetype_comparison,
+            "parent_initial_seeds": parent_seeds,
+            "variant_initial_seeds": variant_seeds,
+            "population_match": population_match,
         },
     }
 
