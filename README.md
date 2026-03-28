@@ -54,7 +54,8 @@ The deterministic components drive ~90% of outcomes. The LLM provides bounded qu
 ### Social Dynamics
 
 - **Stratified seed selection** — Guarantees archetype coverage in the initial seed group
-- **Discussion uplift cap** (0.40) — Prevents hype cascades from overriding weak product fundamentals. Negative deltas flow freely.
+- **Discussion uplift cap** (0.40) — Prevents hype cascades from overriding weak product fundamentals. A product with baseline 0.25 cannot exceed 0.55 via discussions alone.
+- **Discussion downdraft cap** (0.50) — Symmetric floor for negative deltas. Prevents skeptic death spirals from tanking good products. Asymmetric by design — skepticism can fall further than hype can rise.
 - **Concern propagation** — Low-interest NPCs dampen enthusiasm of peers. Source credibility matters. No objections required (low interest alone triggers sharing). Content-aware: objection themes are classified (9 themes) and amplified/dampened by archetype-specific resonance multipliers.
 - **Prompt memory injection** — NPCs carry social memory (peer warnings, discussion history, objection themes) into LLM discussion prompts. An NPC who heard price concerns from a skeptic will naturally reference those concerns when discussing with others. Memory also surfaces in Ask NPC responses.
 - **Resistance floors** — Some archetypes are nearly immune to peer influence when the product is fundamentally wrong for them
@@ -133,7 +134,7 @@ Open **http://localhost:5173**.
 2. **Configure** — Set rounds (3-20), population (10-50), and initial exposure (1-15)
 3. **Launch** — Watch the live simulation: interactive social graph, real-time metrics, event feed
 4. **Review report** — Adoption breakdown, segment analysis, objections, recommendations
-5. **Create variants** — Quick Variant (change 6 key params) or Full Variant. Compare side-by-side with metrics deltas and AI explanation.
+5. **Create variants** — Quick Variant (change 6 key params) or Full Variant. Choose **Fresh seeds** (realistic variance) or **Same seeds** (controlled A/B, isolates the product change). Compare side-by-side with metrics deltas, population verification, and AI explanation.
 6. **Chat with NPCs** — Click any NPC in the graph to ask questions. Responses are grounded in their simulation state.
 
 ## Project Structure
@@ -226,8 +227,10 @@ Auth is currently optional — unauthenticated requests still work but simulatio
 | `GET` | `/api/simulations/{id}/report` | Get structured report |
 | `POST` | `/api/simulations/{id}/ask-npc` | Chat with an NPC |
 | `GET` | `/api/simulations/{id}/variants` | List variants |
-| `GET` | `/api/simulations/{id}/compare/{vid}` | Compare parent vs variant |
+| `GET` | `/api/simulations/{id}/compare/{vid}` | Compare parent vs variant (includes population + seed verification) |
 | `POST` | `/api/simulations/{id}/compare/{vid}/explain` | AI explanation of differences |
+| `DELETE` | `/api/simulations/{id}` | Delete simulation and all its events |
+| `GET` | `/api/simulations/{id}/events` | List persisted events (supports `?tick=N` filter) |
 | `POST` | `/api/assets/upload` | Upload reference asset |
 
 ## Disclaimer

@@ -45,6 +45,8 @@ Both derived from a single `DATABASE_URL` in config. SQLite fallback uses `aiosq
 - **Tiered models**: Haiku for NPC reactions, Sonnet for final report
 - **Deterministic math**: Influence, spread, adoption, convergence — no LLM
 - **Discussion cap**: Max 5 discussions per tick with per-pair cooldown
+- **Discussion uplift cap** (0.40): Interest cannot rise more than 0.40 above NPC baseline via discussions. Prevents hype cascades.
+- **Discussion downdraft cap** (0.50): Interest cannot fall more than 0.50 below baseline via discussions. Prevents skeptic death spirals. Asymmetric — skepticism flows slightly more freely than hype.
 - **Retry with backoff**: 3 retries, 1-8s exponential delay for transient failures
 
 ## Database Schema
@@ -97,8 +99,10 @@ Managed via Alembic migrations (auto-run on startup).
 | GET | /api/simulations/{id}/report | Get structured report |
 | POST | /api/simulations/{id}/ask-npc | Chat with an NPC |
 | GET | /api/simulations/{id}/variants | List variants |
-| GET | /api/simulations/{id}/compare/{vid} | Compare parent vs variant |
+| GET | /api/simulations/{id}/compare/{vid} | Compare parent vs variant (population match + seed lists) |
 | POST | /api/simulations/{id}/compare/{vid}/explain | AI explanation of differences |
+| DELETE | /api/simulations/{id} | Delete simulation and all its events |
+| GET | /api/simulations/{id}/events | List persisted events (supports ?tick=N filter) |
 
 ### Assets
 | Method | Path | Description |
@@ -116,11 +120,17 @@ Managed via Alembic migrations (auto-run on startup).
 
 ## Frontend Pages
 
-1. **Dashboard** — List past simulations, quick stats
-2. **Inject** — Structured form: idea details, market positioning, assets, strengths/risks
+1. **Dashboard** — Simulations grouped by parent/variant hierarchy. Variants stacked under their parent with compact metric cards.
+2. **Inject** — Structured form: idea details, market positioning, assets, strengths/risks. 3 quick-start templates (Notion AI, Oura Ring, Duolingo Max).
 3. **Live Simulation** — Real-time social graph, metrics, event feed via SSE
-4. **Report** — Full results with charts, segment analysis, NPC breakdown
-5. **Compare** — Side-by-side variant comparison with metrics deltas
+4. **Report** — Full results with charts, segment analysis, NPC breakdown. Individual Reactions filterable by seed/all-aware and sortable with seeds-first or others-first. Seed NPCs visually marked.
+5. **Compare** — Side-by-side variant comparison with metrics deltas, population verification (confirms same 30 NPCs), initial seed lists for both runs, archetype impact, AI explanation.
+
+### Variant Seed Mode
+
+When creating a variant, users choose between two seed strategies:
+- **Fresh seeds** (default) — Re-selects the initial 8 exposed NPCs via stratified sampling. Adds realistic market variance but conflates seed selection noise with the product change.
+- **Same seeds** — Locks the variant to use the exact same 8 NPCs that were exposed first in the parent. Isolates the product variable for a controlled A/B comparison.
 
 ## Deployment
 

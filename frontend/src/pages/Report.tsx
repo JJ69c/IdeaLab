@@ -77,6 +77,8 @@ export default function Report() {
   const [parentTitle, setParentTitle] = useState<string | null>(null)
   const [quickVariantOpen, setQuickVariantOpen] = useState(false)
   const [seedIds, setSeedIds] = useState<Set<string>>(new Set())
+  const [npcFilter, setNpcFilter] = useState<'all' | 'seeds_only'>('all')
+  const [npcSort, setNpcSort] = useState<'seeds_first' | 'others_first'>('seeds_first')
 
   useEffect(() => {
     if (!id) return
@@ -366,73 +368,172 @@ export default function Report() {
 
       {/* Individual NPC Results */}
       <section className="bg-white rounded-lg border p-6">
-        <h2 className="text-lg font-semibold mb-4">Individual Reactions</h2>
+        <h2 className="text-lg font-semibold mb-3">Individual Reactions</h2>
+
+        {/* Toolbar: filter + sort controls */}
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          {/* View toggle */}
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-500 mr-1">View:</span>
+            <button
+              onClick={() => setNpcFilter('all')}
+              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                npcFilter === 'all'
+                  ? 'bg-primary/10 text-primary border-primary/30'
+                  : 'text-outline border-outline-variant/20 hover:bg-gray-50'
+              }`}
+            >
+              All Aware
+            </button>
+            <button
+              onClick={() => setNpcFilter('seeds_only')}
+              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                npcFilter === 'seeds_only'
+                  ? 'bg-primary/10 text-primary border-primary/30'
+                  : 'text-outline border-outline-variant/20 hover:bg-gray-50'
+              }`}
+            >
+              Seeds Only
+            </button>
+          </div>
+
+          {/* Order toggle — only shown when viewing all */}
+          {npcFilter === 'all' && (
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-gray-500 mr-1">Order:</span>
+              <button
+                onClick={() => setNpcSort('seeds_first')}
+                className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                  npcSort === 'seeds_first'
+                    ? 'bg-primary/10 text-primary border-primary/30'
+                    : 'text-outline border-outline-variant/20 hover:bg-gray-50'
+                }`}
+              >
+                Seeds First
+              </button>
+              <button
+                onClick={() => setNpcSort('others_first')}
+                className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                  npcSort === 'others_first'
+                    ? 'bg-primary/10 text-primary border-primary/30'
+                    : 'text-outline border-outline-variant/20 hover:bg-gray-50'
+                }`}
+              >
+                Others First
+              </button>
+            </div>
+          )}
+
+          {/* Count display */}
+          <span className="text-xs text-gray-400 ml-auto">
+            {npcFilter === 'seeds_only'
+              ? `${seedIds.size} seed${seedIds.size !== 1 ? 's' : ''}`
+              : `Showing ${npc_results.filter(n => n.stance !== 'unaware').length} of ${npc_results.length} NPCs`
+            }
+          </span>
+        </div>
+
+        {/* Legend */}
         {seedIds.size > 0 && (
           <p className="text-xs text-gray-400 mb-3 flex items-center gap-1">
             <span className="inline-block w-2 h-2 rounded-full bg-blue-400"></span>
-            Blue border = initial seed NPC (exposed on tick 1)
+            Blue border = initial seed NPC (directly exposed on tick 1, before word-of-mouth)
           </p>
         )}
+
         <div className="space-y-3">
-          {npc_results
-            .sort((a, b) => b.interest_score - a.interest_score)
-            .map(npc => {
-            const isSeed = seedIds.has(npc.npc_id)
-            return (
-            <div key={npc.npc_id} className={`rounded-lg p-3 ${isSeed ? 'border-2 border-blue-300 bg-blue-50/30' : 'border'}`}>
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-2">
-                  {isSeed && (
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
-                      seed
-                    </span>
+          {(() => {
+            // Split into aware and unaware
+            const awareNPCs = npc_results.filter(n => n.stance !== 'unaware')
+            const unawareNPCs = npc_results.filter(n => n.stance === 'unaware')
+
+            // Sort aware NPCs: seeds vs others, then by interest score descending within each group
+            const seeds = awareNPCs.filter(n => seedIds.has(n.npc_id)).sort((a, b) => b.interest_score - a.interest_score)
+            const others = awareNPCs.filter(n => !seedIds.has(n.npc_id)).sort((a, b) => b.interest_score - a.interest_score)
+
+            let sortedAware: typeof awareNPCs
+            if (npcSort === 'seeds_first') {
+              sortedAware = [...seeds, ...others]
+            } else {
+              sortedAware = [...others, ...seeds]
+            }
+
+            // Apply filter
+            let visibleNPCs: typeof npc_results
+            if (npcFilter === 'seeds_only') {
+              visibleNPCs = sortedAware.filter(n => seedIds.has(n.npc_id))
+            } else {
+              // All aware + unaware at bottom
+              visibleNPCs = [...sortedAware, ...unawareNPCs]
+            }
+
+            return visibleNPCs.map(npc => {
+              const isSeed = seedIds.has(npc.npc_id)
+              const isUnaware = npc.stance === 'unaware'
+              return (
+                <div key={npc.npc_id} className={`rounded-lg p-3 ${
+                  isUnaware
+                    ? 'border border-dashed border-gray-200 opacity-60'
+                    : isSeed
+                      ? 'border-2 border-blue-300 bg-blue-50/30'
+                      : 'border'
+                }`}>
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-2">
+                      {isSeed && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                          seed
+                        </span>
+                      )}
+                      <span className="font-medium">{npc.name}</span>
+                      <span className="text-gray-400 text-sm">{npc.occupation}, {npc.age}</span>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      {npc.adopted !== undefined && !isUnaware && (
+                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                          npc.adopted ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {npc.adopted ? 'adopted' : 'not adopted'}
+                        </span>
+                      )}
+                      {!isUnaware && (
+                        <span className={`text-xs px-2 py-0.5 rounded ${
+                          npc.would_pay ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {npc.would_pay ? 'would pay' : 'no pay'}
+                        </span>
+                      )}
+                      <span className="text-xs px-2 py-0.5 rounded" style={{
+                        backgroundColor: (STANCE_COLORS[npc.stance] || '#9ca3af') + '20',
+                        color: STANCE_COLORS[npc.stance] || '#9ca3af',
+                      }}>
+                        {npc.stance}{!isUnaware && ` (${Math.round(npc.interest_score * 100)}%)`}
+                      </span>
+                    </div>
+                  </div>
+                  {!isUnaware && <p className="text-sm text-gray-600 mt-2">{npc.reasoning}</p>}
+                  {npc.objections.length > 0 && !isUnaware && (
+                    <div className="mt-2 flex gap-2 flex-wrap">
+                      {npc.objections.map((obj, i) => (
+                        <span key={i} className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded">
+                          {obj}
+                        </span>
+                      ))}
+                    </div>
                   )}
-                  <span className="font-medium">{npc.name}</span>
-                  <span className="text-gray-400 text-sm">{npc.occupation}, {npc.age}</span>
-                </div>
-                <div className="flex gap-2 items-center">
-                  {npc.adopted !== undefined && (
-                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-                      npc.adopted ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {npc.adopted ? 'adopted' : 'not adopted'}
-                    </span>
+                  {npc.adoption_blockers && npc.adoption_blockers.length > 0 && !isUnaware && (
+                    <div className="mt-2 flex gap-2 flex-wrap">
+                      {npc.adoption_blockers.map((b, i) => (
+                        <span key={i} className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded">
+                          {b}
+                        </span>
+                      ))}
+                    </div>
                   )}
-                  <span className={`text-xs px-2 py-0.5 rounded ${
-                    npc.would_pay ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    {npc.would_pay ? 'would pay' : 'no pay'}
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded" style={{
-                    backgroundColor: (STANCE_COLORS[npc.stance] || '#6366f1') + '20',
-                    color: STANCE_COLORS[npc.stance] || '#6366f1',
-                  }}>
-                    {npc.stance} ({Math.round(npc.interest_score * 100)}%)
-                  </span>
                 </div>
-              </div>
-              <p className="text-sm text-gray-600 mt-2">{npc.reasoning}</p>
-              {npc.objections.length > 0 && (
-                <div className="mt-2 flex gap-2 flex-wrap">
-                  {npc.objections.map((obj, i) => (
-                    <span key={i} className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded">
-                      {obj}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {npc.adoption_blockers && npc.adoption_blockers.length > 0 && (
-                <div className="mt-2 flex gap-2 flex-wrap">
-                  {npc.adoption_blockers.map((b, i) => (
-                    <span key={i} className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded">
-                      {b}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-            )
-          })}
+              )
+            })
+          })()}
         </div>
       </section>
 
