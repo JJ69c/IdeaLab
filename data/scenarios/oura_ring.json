@@ -1,0 +1,20 @@
+{
+  "idea": {
+    "title": "Oura Ring 4",
+    "description": "A titanium smart ring that tracks sleep quality, heart rate variability, body temperature trends, blood oxygen, and daily activity. Provides a daily Readiness Score telling you how recovered your body is. No screen, no notifications — just passive 24/7 health monitoring with insights delivered through a companion app.",
+    "category": "hardware",
+    "stage": "launched",
+    "target_audience": "Health-conscious adults 25-55 who want passive biometric tracking without the bulkiness or notification overload of smartwatches",
+    "problem_statement": "People want to understand their sleep and recovery but find smartwatches uncomfortable for sleeping, intrusive with notifications, and socially awkward in professional settings.",
+    "price_point": "$50–$100/mo",
+    "existing_alternatives": "Apple Watch, Fitbit, Whoop",
+    "differentiator": "Ring form factor — invisible, comfortable for sleep, no screen distraction. Medical-grade sensors in a fashion-forward design that looks like jewelry, not tech.",
+    "known_strengths": "Best-in-class sleep tracking accuracy, 7-day battery life, lightweight and comfortable for 24/7 wear, strong brand among biohackers and athletes",
+    "known_risks": "$349 hardware cost plus $6/mo subscription feels like double-dipping, no display means full dependency on phone app, limited fitness tracking compared to watches"
+  },
+  "config": {
+    "num_ticks": 8,
+    "population_size": 30,
+    "seed_count": 8
+  }
+}

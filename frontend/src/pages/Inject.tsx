@@ -98,6 +98,83 @@ const ASSET_TYPE_OPTIONS = [
 
 const MAX_ASSETS = 5
 
+// ---------------------------------------------------------------------------
+// Quick-start templates — 3 products from different industries
+// ---------------------------------------------------------------------------
+
+interface SimTemplate {
+  label: string
+  icon: string
+  color: string
+  form: Record<string, string | number>
+}
+
+const TEMPLATES: SimTemplate[] = [
+  {
+    label: 'Notion AI',
+    icon: 'edit_note',
+    color: 'from-blue-500/20 to-indigo-500/20 border-blue-400/30',
+    form: {
+      title: 'Notion AI',
+      description: 'An AI writing and knowledge assistant built into Notion, the popular workspace app. It can draft documents, summarize meeting notes, generate action items from pages, translate content, and answer questions about your workspace data. Integrated directly into the editor — highlight text and ask AI to improve, shorten, or rewrite it.',
+      category: 'saas',
+      stage: 'launched',
+      target_audience: 'Knowledge workers, project managers, and small teams already using or considering Notion for docs, wikis, and project tracking',
+      problem_statement: 'Workers spend hours writing first drafts, summarizing long documents, and searching across scattered notes. Existing AI tools require copy-pasting into separate apps, breaking workflow.',
+      price_point: '$5\u2013$20/mo',
+      existing_alternatives: 'ChatGPT, Google Docs, Microsoft Copilot',
+      differentiator: 'Embedded directly in the workspace where your data already lives — no context switching, no copy-paste. AI has full access to your pages and databases for contextual answers.',
+      known_strengths: 'Massive existing user base, seamless UX integration, workspace context gives better answers than generic chatbots',
+      known_risks: 'Privacy concerns about AI reading workspace data, $10/user/mo add-on feels expensive on top of existing subscription, output quality sometimes generic',
+      num_ticks: 8,
+      population_size: 30,
+      seed_count: 8,
+    },
+  },
+  {
+    label: 'Oura Ring 4',
+    icon: 'fitness_center',
+    color: 'from-emerald-500/20 to-teal-500/20 border-emerald-400/30',
+    form: {
+      title: 'Oura Ring 4',
+      description: 'A titanium smart ring that tracks sleep quality, heart rate variability, body temperature trends, blood oxygen, and daily activity. Provides a daily Readiness Score telling you how recovered your body is. No screen, no notifications — just passive 24/7 health monitoring with insights delivered through a companion app.',
+      category: 'hardware',
+      stage: 'launched',
+      target_audience: 'Health-conscious adults 25-55 who want passive biometric tracking without the bulkiness or notification overload of smartwatches',
+      problem_statement: 'People want to understand their sleep and recovery but find smartwatches uncomfortable for sleeping, intrusive with notifications, and socially awkward in professional settings.',
+      price_point: '$50\u2013$100/mo',
+      existing_alternatives: 'Apple Watch, Fitbit, Whoop',
+      differentiator: 'Ring form factor — invisible, comfortable for sleep, no screen distraction. Medical-grade sensors in a fashion-forward design that looks like jewelry, not tech.',
+      known_strengths: 'Best-in-class sleep tracking accuracy, 7-day battery life, lightweight and comfortable for 24/7 wear, strong brand among biohackers and athletes',
+      known_risks: '$349 hardware cost plus $6/mo subscription feels like double-dipping, no display means full dependency on phone app, limited fitness tracking compared to watches',
+      num_ticks: 8,
+      population_size: 30,
+      seed_count: 8,
+    },
+  },
+  {
+    label: 'Duolingo Max',
+    icon: 'translate',
+    color: 'from-amber-500/20 to-orange-500/20 border-amber-400/30',
+    form: {
+      title: 'Duolingo Max',
+      description: 'A premium tier of the Duolingo language learning app featuring two AI-powered features: Roleplay (practice real conversations with AI characters in target language scenarios like ordering coffee or negotiating a deal) and Explain My Answer (get detailed explanations of why your answer was wrong, with grammar breakdowns and examples). Built on GPT-4.',
+      category: 'education',
+      stage: 'launched',
+      target_audience: 'Casual language learners aged 18-40 who use Duolingo regularly and want to bridge the gap between structured lessons and real conversation ability',
+      problem_statement: 'Language apps teach vocabulary and grammar but users plateau and cannot hold real conversations. Speaking practice requires expensive tutors or immersion that most learners cannot access.',
+      price_point: '$20\u2013$50/mo',
+      existing_alternatives: 'Babbel, Rosetta Stone, italki tutors, ChatGPT for conversation practice',
+      differentiator: 'AI roleplay scenarios integrated into the gamified Duolingo experience — practice conversations without the anxiety of real humans, with instant corrections and encouragement from familiar characters.',
+      known_strengths: 'Massive user base of 100M+ monthly actives, beloved gamification and streak mechanics, low barrier to upgrade from free tier',
+      known_risks: 'At $30/mo it is 2x the cost of Super Duolingo, AI conversations feel scripted compared to real tutors, only available for Spanish and French initially, free users may not see enough value to jump two pricing tiers',
+      num_ticks: 8,
+      population_size: 30,
+      seed_count: 8,
+    },
+  },
+]
+
 interface AssetEntry {
   id: string
   file: File | null
@@ -509,6 +586,33 @@ export default function Inject() {
           <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-lg bg-primary/10 text-primary">
             What-If
           </span>
+        </div>
+      )}
+
+      {/* Quick-start templates (only for new simulations, not variants) */}
+      {!variantParent && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="material-symbols-outlined text-[18px] text-primary">bolt</span>
+            <span className="text-sm font-semibold text-on-surface">Quick Start</span>
+            <span className="text-xs text-on-surface-variant">— pick a template or start from scratch</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {TEMPLATES.map((t) => (
+              <button
+                key={t.label}
+                type="button"
+                onClick={() => setForm(f => ({ ...f, ...t.form, price_point: t.form.price_point as string, customPrice: '' }))}
+                className={`glass-panel rounded-2xl border bg-gradient-to-br ${t.color} p-4 text-left hover:scale-[0.98] active:scale-95 transition-all group`}
+              >
+                <span className="material-symbols-outlined text-[24px] text-on-surface-variant group-hover:text-primary transition-colors">{t.icon}</span>
+                <div className="mt-2 text-sm font-bold text-on-surface">{t.label}</div>
+                <div className="text-[11px] text-on-surface-variant mt-0.5 line-clamp-2">
+                  {(t.form.category as string).replace(/_/g, ' ')} &middot; {t.form.stage as string}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

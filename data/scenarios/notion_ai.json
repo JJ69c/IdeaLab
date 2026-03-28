@@ -1,0 +1,20 @@
+{
+  "idea": {
+    "title": "Notion AI",
+    "description": "An AI writing and knowledge assistant built into Notion, the popular workspace app. It can draft documents, summarize meeting notes, generate action items from pages, translate content, and answer questions about your workspace data. Integrated directly into the editor — highlight text and ask AI to improve, shorten, or rewrite it.",
+    "category": "saas",
+    "stage": "launched",
+    "target_audience": "Knowledge workers, project managers, and small teams already using or considering Notion for docs, wikis, and project tracking",
+    "problem_statement": "Workers spend hours writing first drafts, summarizing long documents, and searching across scattered notes. Existing AI tools require copy-pasting into separate apps, breaking workflow.",
+    "price_point": "$5–$20/mo",
+    "existing_alternatives": "ChatGPT, Google Docs, Microsoft Copilot",
+    "differentiator": "Embedded directly in the workspace where your data already lives — no context switching, no copy-paste. AI has full access to your pages and databases for contextual answers.",
+    "known_strengths": "Massive existing user base, seamless UX integration, workspace context gives better answers than generic chatbots",
+    "known_risks": "Privacy concerns about AI reading workspace data, $10/user/mo add-on feels expensive on top of existing subscription, output quality sometimes generic"
+  },
+  "config": {
+    "num_ticks": 8,
+    "population_size": 30,
+    "seed_count": 8
+  }
+}

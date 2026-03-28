@@ -1,0 +1,20 @@
+{
+  "idea": {
+    "title": "Duolingo Max",
+    "description": "A premium tier of the Duolingo language learning app featuring two AI-powered features: Roleplay (practice real conversations with AI characters in target language scenarios like ordering coffee or negotiating a deal) and Explain My Answer (get detailed explanations of why your answer was wrong, with grammar breakdowns and examples). Built on GPT-4.",
+    "category": "education",
+    "stage": "launched",
+    "target_audience": "Casual language learners aged 18-40 who use Duolingo regularly and want to bridge the gap between structured lessons and real conversation ability",
+    "problem_statement": "Language apps teach vocabulary and grammar but users plateau and cannot hold real conversations. Speaking practice requires expensive tutors or immersion that most learners cannot access.",
+    "price_point": "$20–$50/mo",
+    "existing_alternatives": "Babbel, Rosetta Stone, italki tutors, ChatGPT for conversation practice",
+    "differentiator": "AI roleplay scenarios integrated into the gamified Duolingo experience — practice conversations without the anxiety of real humans, with instant corrections and encouragement from familiar characters.",
+    "known_strengths": "Massive user base of 100M+ monthly actives, beloved gamification and streak mechanics, low barrier to upgrade from free tier",
+    "known_risks": "At $30/mo it is 2x the cost of Super Duolingo, AI conversations feel scripted compared to real tutors, only available for Spanish and French initially, free users may not see enough value to jump two pricing tiers"
+  },
+  "config": {
+    "num_ticks": 8,
+    "population_size": 30,
+    "seed_count": 8
+  }
+}
