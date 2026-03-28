@@ -42,6 +42,11 @@ _noop: EventCallback = lambda e: None
 # Set to 0 to disable the cap.
 DISCUSSION_UPLIFT_CAP = 0.40
 
+# Symmetric floor for negative discussion deltas.
+# Prevents death spirals where a few skeptics tank the entire population.
+# Slightly more permissive than uplift cap — skepticism flows more freely than hype.
+DISCUSSION_DOWNDRAFT_CAP = 0.50
+
 
 def create_world(
     idea: InjectedIdea,
@@ -626,13 +631,14 @@ def _run_discussion(
     a_delta = round(raw_a_delta * a_weight, 4)
     b_delta = round(raw_b_delta * b_weight, 4)
 
-    # Cap positive discussion uplift so it cannot exceed baseline + DISCUSSION_UPLIFT_CAP.
-    # This prevents discussion cascades from overriding weak product fundamentals.
-    # Negative deltas are not capped — skepticism should flow freely.
+    # Cap discussion deltas so they cannot push interest beyond baseline ± cap.
+    # Uplift cap: prevents hype cascades from overriding weak product fundamentals.
+    # Downdraft cap: prevents skeptic death spirals from tanking good products.
+    baselines = getattr(world, "_npc_baselines", {})
+    a_baseline = baselines.get(npc_a.id, 0.5)
+    b_baseline = baselines.get(npc_b.id, 0.5)
+
     if DISCUSSION_UPLIFT_CAP > 0:
-        baselines = getattr(world, "_npc_baselines", {})
-        a_baseline = baselines.get(npc_a.id, 0.5)
-        b_baseline = baselines.get(npc_b.id, 0.5)
         if a_delta > 0:
             a_ceiling = a_baseline + DISCUSSION_UPLIFT_CAP
             a_room = max(0.0, a_ceiling - npc_a.state.interest_score)
@@ -641,6 +647,16 @@ def _run_discussion(
             b_ceiling = b_baseline + DISCUSSION_UPLIFT_CAP
             b_room = max(0.0, b_ceiling - npc_b.state.interest_score)
             b_delta = min(b_delta, b_room)
+
+    if DISCUSSION_DOWNDRAFT_CAP > 0:
+        if a_delta < 0:
+            a_floor = a_baseline - DISCUSSION_DOWNDRAFT_CAP
+            a_room = min(0.0, a_floor - npc_a.state.interest_score)
+            a_delta = max(a_delta, a_room)
+        if b_delta < 0:
+            b_floor = b_baseline - DISCUSSION_DOWNDRAFT_CAP
+            b_room = min(0.0, b_floor - npc_b.state.interest_score)
+            b_delta = max(b_delta, b_room)
 
     a_new_stance = npc_a.state.apply_discussion_outcome(
         a_delta, tick, npc_b.id, partner_name=npc_b.name, key_point=key_point,

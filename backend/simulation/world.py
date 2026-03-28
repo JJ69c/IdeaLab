@@ -115,7 +115,7 @@ class WorldState:
                 "viral_coefficient": 0, "net_sentiment": 0, "adoption_rate": 0,
             }
 
-        interested = sum(1 for n in self.aware_npcs if n.state.stance in ("interested", "curious"))
+        interested = sum(1 for n in self.aware_npcs if n.state.stance in ("interested", "willing_to_try", "willing_to_pay"))
         opposed = sum(1 for n in self.aware_npcs if n.state.stance in ("opposed", "skeptical"))
         spreaders = sum(
             1 for n in self.aware_npcs
