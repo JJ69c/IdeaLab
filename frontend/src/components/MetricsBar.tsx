@@ -16,7 +16,7 @@ const METRIC_DEFS: MetricDef[] = [
   { key: 'awareness_rate', label: 'Awareness', icon: 'visibility', format: v => `${(v * 100).toFixed(0)}%` },
   { key: 'interest_rate', label: 'Interest', icon: 'favorite', format: v => `${(v * 100).toFixed(0)}%` },
   { key: 'rejection_rate', label: 'Rejection', icon: 'thumb_down', format: v => `${(v * 100).toFixed(0)}%` },
-  { key: 'viral_coefficient', label: 'Viral Coeff', icon: 'share', format: v => v.toFixed(2) },
+  { key: 'recommendation_rate', label: 'Rec. Rate', icon: 'share', format: v => `${(v * 100).toFixed(0)}%` },
   { key: 'net_sentiment', label: 'Sentiment', icon: 'sentiment_satisfied', format: v => (v >= 0 ? '+' : '') + v.toFixed(2) },
   { key: 'would_pay_rate', label: 'Would Pay', icon: 'payments', format: v => `${(v * 100).toFixed(0)}%` },
   { key: 'adoption_rate', label: 'Adoption', icon: 'trending_up', format: v => `${(v * 100).toFixed(0)}%` },

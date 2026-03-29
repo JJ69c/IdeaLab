@@ -60,6 +60,12 @@ class SimulationRecord(Base):
     variant_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     changed_fields: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
+    # V2 engine support
+    simulation_version: Mapped[str] = mapped_column(
+        String(10), default="v1", server_default="v1"
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
 
 class Asset(Base):
     __tablename__ = "assets"

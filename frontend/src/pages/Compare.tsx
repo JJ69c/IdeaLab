@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 
 // ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ const METRIC_LABELS: Record<string, string> = {
   awareness_rate: 'Awareness',
   interest_rate: 'Interest',
   rejection_rate: 'Rejection',
-  viral_coefficient: 'Viral Coeff.',
+  recommendation_rate: 'Rec. Rate',
   net_sentiment: 'Net Sentiment',
   would_pay_rate: 'Would Pay',
   adoption_rate: 'Adoption',
@@ -164,7 +164,14 @@ export default function Compare() {
   const [error, setError] = useState('')
   const [explanation, setExplanation] = useState<Explanation | null>(null)
   const [explaining, setExplaining] = useState(false)
+  // Track both root and direct parent for comparison toggling
+  const [rootSimId, setRootSimId] = useState<string | null>(null)
   const [parentSimId, setParentSimId] = useState<string | null>(null)
+  const [compareTarget, setCompareTarget] = useState<'root' | 'parent'>('root')
+
+  const activeTargetId = compareTarget === 'root' ? (rootSimId || parentSimId) : parentSimId
+  const canToggle = rootSimId && parentSimId && rootSimId !== parentSimId
+  const initialLoadDone = useRef(false)
 
   useEffect(() => {
     if (!variantId) return
@@ -177,9 +184,13 @@ export default function Compare() {
           setLoading(false)
           return
         }
+        const root = variant.root_simulation_id || variant.parent_simulation_id
+        setRootSimId(root)
         setParentSimId(variant.parent_simulation_id)
+        // Default compare against root
+        const targetId = root
         return fetch(
-          `/api/simulations/${variant.parent_simulation_id}/compare/${variantId}`
+          `/api/simulations/${targetId}/compare/${variantId}`
         )
           .then(r => {
             if (!r.ok) throw new Error(`Failed to load comparison: ${r.status}`)
@@ -188,6 +199,7 @@ export default function Compare() {
           .then(compareData => {
             setData(compareData)
             setLoading(false)
+            initialLoadDone.current = true
           })
       })
       .catch(err => {
@@ -196,10 +208,33 @@ export default function Compare() {
       })
   }, [variantId])
 
+  // Re-fetch comparison when toggle changes
+  useEffect(() => {
+    if (!initialLoadDone.current) return
+    if (!variantId || !activeTargetId) return
+    setData(null)
+    setExplanation(null)
+    setLoading(true)
+    fetch(`/api/simulations/${activeTargetId}/compare/${variantId}`)
+      .then(r => {
+        if (!r.ok) throw new Error(`Failed to load comparison: ${r.status}`)
+        return r.json()
+      })
+      .then(compareData => {
+        setData(compareData)
+        setLoading(false)
+      })
+      .catch(err => {
+        setError(err instanceof Error ? err.message : 'Failed to load')
+        setLoading(false)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compareTarget])
+
   const handleExplain = () => {
-    if (!parentSimId || !variantId || explaining) return
+    if (!activeTargetId || !variantId || explaining) return
     setExplaining(true)
-    fetch(`/api/simulations/${parentSimId}/compare/${variantId}/explain`, {
+    fetch(`/api/simulations/${activeTargetId}/compare/${variantId}/explain`, {
       method: 'POST',
     })
       .then(r => {
@@ -274,7 +309,37 @@ export default function Compare() {
           <Link to={`/report/${data.variant.id}`} className="text-primary hover:underline font-medium">
             {data.variant.idea_title}
           </Link>
+          <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-indigo-50 text-indigo-600">
+            variant
+          </span>
         </div>
+        {canToggle && (
+          <div className="flex items-center gap-2 mt-3">
+            <span className="text-xs text-outline">Comparing against:</span>
+            <div className="inline-flex rounded-lg border border-outline-variant/30 overflow-hidden">
+              <button
+                onClick={() => setCompareTarget('root')}
+                className={`px-3 py-1 text-xs font-semibold transition-colors ${
+                  compareTarget === 'root'
+                    ? 'bg-primary text-on-primary'
+                    : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                }`}
+              >
+                Original (Root)
+              </button>
+              <button
+                onClick={() => setCompareTarget('parent')}
+                className={`px-3 py-1 text-xs font-semibold transition-colors ${
+                  compareTarget === 'parent'
+                    ? 'bg-primary text-on-primary'
+                    : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                }`}
+              >
+                Direct Parent
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* What Changed */}
@@ -302,6 +367,54 @@ export default function Compare() {
           </div>
         </section>
       )}
+
+      {/* Config Comparison */}
+      {(() => {
+        const configLabels: Record<string, string> = {
+          num_ticks: 'Rounds',
+          population_size: 'Population',
+          seed_count: 'Initial Exposure',
+        }
+        const pConfig = data.parent.config || {}
+        const vConfig = data.variant.config || {}
+        const configKeys = Object.keys(configLabels)
+        const hasDiff = configKeys.some(k => pConfig[k] !== vConfig[k])
+        return (
+          <section className="glass-panel rounded-3xl border border-white/40 p-6">
+            <SectionHeader icon="tune" title="Simulation Config" />
+            <div className="grid grid-cols-3 gap-3">
+              {configKeys.map(key => {
+                const pVal = pConfig[key]
+                const vVal = vConfig[key]
+                const changed = pVal !== vVal
+                return (
+                  <div key={key} className={`rounded-2xl p-4 text-center border ${
+                    changed
+                      ? 'bg-amber-50 border-amber-200'
+                      : 'bg-surface-container-lowest border-outline-variant/20'
+                  }`}>
+                    <div className="text-[10px] font-bold text-outline uppercase tracking-widest mb-2">
+                      {configLabels[key]}
+                    </div>
+                    {changed ? (
+                      <div className="flex justify-center items-baseline gap-2">
+                        <span className="text-on-surface-variant text-sm line-through">{pVal ?? '—'}</span>
+                        <span className="material-symbols-outlined text-[14px] text-outline">arrow_forward</span>
+                        <span className="text-on-surface font-bold">{vVal ?? '—'}</span>
+                      </div>
+                    ) : (
+                      <span className="text-on-surface font-bold">{pVal ?? '—'}</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {!hasDiff && (
+              <p className="text-xs text-outline mt-3">Same configuration for both simulations</p>
+            )}
+          </section>
+        )
+      })()}
 
       {/* Metrics Comparison */}
       <section className="glass-panel rounded-3xl border border-white/40 p-6">

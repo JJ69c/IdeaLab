@@ -87,6 +87,7 @@ async def create_simulation(
         variant_name=request.variant_name,
         changed_fields=changed_fields,
         user_id=user_id,
+        simulation_version=request.simulation_version,
     )
     db.add(record)
     await db.commit()
@@ -146,6 +147,7 @@ async def create_simulation(
         sim_id, idea, config, asset_file_paths, asset_metadata,
         parent_simulation_id=request.parent_simulation_id,
         use_parent_seeds=bool(request.parent_simulation_id and request.use_parent_seeds),
+        simulation_version=request.simulation_version,
     )
 
     return SimulationDetail(
@@ -161,6 +163,7 @@ async def create_simulation(
         root_simulation_id=record.root_simulation_id,
         variant_name=record.variant_name,
         changed_fields=record.changed_fields,
+        simulation_version=record.simulation_version,
     )
 
 
@@ -264,6 +267,7 @@ def _launch_with_timeout(
     asset_metadata: list[dict] | None = None,
     parent_simulation_id: str | None = None,
     use_parent_seeds: bool = False,
+    simulation_version: str = "v1",
 ):
     """Launch the simulation thread and a watchdog that enforces a timeout.
 
@@ -297,7 +301,8 @@ def _launch_with_timeout(
 
     worker = threading.Thread(
         target=_run_simulation_thread,
-        args=(sim_id, idea, config, asset_file_paths, asset_metadata, parent_simulation_id, use_parent_seeds),
+        args=(sim_id, idea, config, asset_file_paths, asset_metadata,
+              parent_simulation_id, use_parent_seeds, simulation_version),
         daemon=True,
     )
     worker.start()
@@ -314,6 +319,7 @@ def _run_simulation_thread(
     asset_metadata: list[dict] | None = None,
     parent_simulation_id: str | None = None,
     use_parent_seeds: bool = False,
+    simulation_version: str = "v1",
 ):
     """Run the simulation in a background thread.
 
@@ -337,7 +343,7 @@ def _run_simulation_thread(
             )
             db_session.add(db_event)
             # Commit at tick boundaries for crash resilience
-            if event["type"] in ("tick_end", "simulation_complete", "error"):
+            if event["type"] in ("tick_end", "simulation_complete", "error", "v2_progress"):
                 db_session.commit()
         except Exception:
             logger.warning("Failed to persist event for sim %s", sim_id, exc_info=True)
@@ -364,10 +370,18 @@ def _run_simulation_thread(
             if use_parent_seeds:
                 seed_override = _load_parent_seed_ids(db_session, parent_simulation_id)
 
-        report = run_simulation(
-            idea, config, emit=emit, asset_signals=asset_signals,
-            population_override=population_override, seed_override=seed_override,
-        )
+        # --- Dispatch: V1 or V2 engine ---
+        if simulation_version == "v2":
+            from backend.simulation.engine_v2 import run_simulation_v2
+            report = run_simulation_v2(
+                idea, config, emit=emit, asset_signals=asset_signals,
+                population_override=population_override, seed_override=seed_override,
+            )
+        else:
+            report = run_simulation(
+                idea, config, emit=emit, asset_signals=asset_signals,
+                population_override=population_override, seed_override=seed_override,
+            )
 
         # Final commit for any unflushed events
         db_session.commit()
@@ -382,11 +396,12 @@ def _run_simulation_thread(
             record.metrics = report.get("metrics", {})
             db_session.commit()
 
-        logger.info("Simulation %s completed successfully", sim_id)
+        logger.info("Simulation %s (%s) completed successfully", sim_id, simulation_version)
 
-    except Exception:
+    except Exception as exc:
         logger.exception("Simulation %s failed", sim_id)
         db_session.rollback()
+        error_msg = str(exc)[:500]
         emit({"type": "error", "tick": 0, "data": {"message": "Simulation failed"}})
         db_session.commit()
 
@@ -394,6 +409,7 @@ def _run_simulation_thread(
             record = db_session.get(SimulationRecord, sim_id)
             if record:
                 record.status = "failed"
+                record.error_message = error_msg
                 db_session.commit()
         except Exception:
             logger.warning("Failed to mark sim %s as failed", sim_id, exc_info=True)
@@ -516,6 +532,7 @@ async def list_simulations(
             parent_simulation_id=r.parent_simulation_id,
             root_simulation_id=r.root_simulation_id,
             variant_name=r.variant_name,
+            simulation_version=r.simulation_version,
         )
         for r in records
     ]
@@ -539,6 +556,8 @@ async def get_simulation(simulation_id: str, db: AsyncSession = Depends(get_db))
         parent_simulation_id=record.parent_simulation_id,
         root_simulation_id=record.root_simulation_id,
         variant_name=record.variant_name, changed_fields=record.changed_fields,
+        simulation_version=record.simulation_version,
+        error_message=record.error_message,
     )
 
 
@@ -597,6 +616,7 @@ async def list_variants(simulation_id: str, db: AsyncSession = Depends(get_db)):
             parent_simulation_id=r.parent_simulation_id,
             root_simulation_id=r.root_simulation_id,
             variant_name=r.variant_name,
+            simulation_version=r.simulation_version,
         )
         for r in records
     ]
@@ -823,9 +843,13 @@ async def compare_simulations(
     if not variant:
         raise HTTPException(status_code=404, detail="Variant simulation not found")
 
-    if variant.parent_simulation_id != simulation_id:
+    # Allow comparison against direct parent OR root simulation
+    is_parent = variant.parent_simulation_id == simulation_id
+    is_root = variant.root_simulation_id == simulation_id
+    if not is_parent and not is_root:
         raise HTTPException(
-            status_code=400, detail="Variant does not belong to this parent"
+            status_code=400,
+            detail="Simulation is not the parent or root of this variant",
         )
 
     # Fetch initial seeds and population match
@@ -943,9 +967,13 @@ async def explain_comparison(
     if not variant:
         raise HTTPException(status_code=404, detail="Variant simulation not found")
 
-    if variant.parent_simulation_id != simulation_id:
+    # Allow comparison against direct parent OR root simulation
+    is_parent = variant.parent_simulation_id == simulation_id
+    is_root = variant.root_simulation_id == simulation_id
+    if not is_parent and not is_root:
         raise HTTPException(
-            status_code=400, detail="Variant does not belong to this parent"
+            status_code=400,
+            detail="Simulation is not the parent or root of this variant",
         )
 
     if parent.status != "completed" or variant.status != "completed":

@@ -18,6 +18,7 @@ interface QuickVariantDrawerProps {
     idea_category: string
     idea_metadata: Record<string, string>
     config: Record<string, number>
+    parent_simulation_id?: string | null
   }
 }
 
@@ -33,9 +34,11 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
     existing_alternatives: meta.existing_alternatives || '',
     num_ticks: config.num_ticks ?? 8,
     population_size: config.population_size ?? 30,
+    seed_count: config.seed_count ?? 8,
   })
   const [variantName, setVariantName] = useState('')
   const [useParentSeeds, setUseParentSeeds] = useState(false)
+  const [simulationVersion, setSimulationVersion] = useState<'v1' | 'v2'>('v1')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -43,6 +46,13 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
     setForm(f => ({ ...f, [field]: value }))
 
   const handleSubmit = async () => {
+    // Validate population >= initial exposure
+    const effectiveSeedCount = useParentSeeds ? (config.seed_count ?? 8) : form.seed_count
+    if (effectiveSeedCount > form.population_size) {
+      setError(`Initial Exposure (${effectiveSeedCount}) cannot exceed Population Size (${form.population_size}). Please adjust the sliders.`)
+      return
+    }
+
     setLoading(true)
     setError('')
 
@@ -64,11 +74,12 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
         config: {
           num_ticks: form.num_ticks,
           population_size: form.population_size,
-          seed_count: config.seed_count ?? 8,
+          seed_count: useParentSeeds ? (config.seed_count ?? 8) : form.seed_count,
         },
         parent_simulation_id: parentSimulation.id,
         variant_name: variantName.trim() || undefined,
         use_parent_seeds: useParentSeeds,
+        simulation_version: simulationVersion,
         asset_refs: [],
       }
 
@@ -78,12 +89,17 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
         body: JSON.stringify(body),
       })
 
-      if (!res.ok) throw new Error(`Server error: ${res.status}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        const detail = body?.detail || `Server error: ${res.status}`
+        throw new Error(detail)
+      }
 
       const data = await res.json()
       navigate(`/simulation/${data.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
+      const msg = err instanceof Error ? err.message : 'Something went wrong'
+      setError(msg.includes('fetch') ? 'Could not reach server — is the backend running?' : msg)
       setLoading(false)
     }
   }
@@ -118,6 +134,17 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
           <p className="text-xs text-on-surface-variant">
             Test a "what-if" by adjusting key parameters. Everything else stays the same as the original.
           </p>
+
+          {/* Parent info */}
+          <div className="flex items-center gap-2 text-xs text-on-surface-variant bg-surface-container-lowest rounded-xl px-3 py-2 border border-outline-variant/20">
+            <span className="material-symbols-outlined text-[14px] text-primary">fork_right</span>
+            <span>Based on: <span className="font-semibold text-on-surface">{parentSimulation.idea_title}</span></span>
+            {parentSimulation.parent_simulation_id && (
+              <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-orange-50 text-orange-600">
+                variant
+              </span>
+            )}
+          </div>
 
           {/* Variant Name */}
           <div>
@@ -172,6 +199,49 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
                 </span>
                 <span className="text-[10px] text-outline leading-snug">
                   Fix who hears first — isolates the product change
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Engine Version */}
+          <div>
+            <label className="block text-[10px] font-bold text-outline uppercase tracking-widest mb-2">
+              Engine Version
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setSimulationVersion('v1')}
+                className={`flex flex-col items-start gap-1 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                  simulationVersion === 'v1'
+                    ? 'border-primary/40 bg-primary/5 ring-1 ring-primary/20'
+                    : 'border-outline-variant/30 hover:border-outline-variant/50'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
+                  <span className="material-symbols-outlined text-[14px]">calculate</span>
+                  V1 Deterministic
+                </span>
+                <span className="text-[10px] text-outline leading-snug">
+                  Fast, consistent, math-driven
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSimulationVersion('v2')}
+                className={`flex flex-col items-start gap-1 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                  simulationVersion === 'v2'
+                    ? 'border-purple-400/40 bg-purple-500/5 ring-1 ring-purple-400/20'
+                    : 'border-outline-variant/30 hover:border-outline-variant/50'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
+                  <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                  V2 LLM-Primary
+                </span>
+                <span className="text-[10px] text-outline leading-snug">
+                  Slower, costlier, more nuanced
                 </span>
               </button>
             </div>
@@ -270,8 +340,36 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
               min={10} max={50} step={5}
               className="w-full accent-primary h-2 rounded-full"
               value={form.population_size}
-              onChange={e => update('population_size', parseInt(e.target.value))}
+              onChange={e => {
+                const val = parseInt(e.target.value)
+                update('population_size', val)
+              }}
             />
+          </div>
+
+          {/* Initial Exposure */}
+          <div className={useParentSeeds ? 'opacity-50 pointer-events-none' : ''}>
+            <div className="flex justify-between items-baseline mb-2">
+              <label className="text-[10px] font-bold text-outline uppercase tracking-widest">
+                Initial Exposure
+              </label>
+              <span className="text-xs font-semibold text-primary">
+                {useParentSeeds ? (config.seed_count ?? 8) : form.seed_count} NPCs
+              </span>
+            </div>
+            <input
+              type="range"
+              min={1} max={form.population_size} step={1}
+              className="w-full accent-primary h-2 rounded-full"
+              value={form.seed_count}
+              onChange={e => update('seed_count', Math.min(parseInt(e.target.value), form.population_size))}
+              disabled={useParentSeeds}
+            />
+            {useParentSeeds && (
+              <p className="text-[10px] text-outline mt-1">
+                Locked — using same seeds as original
+              </p>
+            )}
           </div>
 
           {/* Error */}

@@ -112,7 +112,7 @@ class WorldState:
         if aware == 0:
             return {
                 "awareness_rate": 0, "interest_rate": 0, "rejection_rate": 0,
-                "viral_coefficient": 0, "net_sentiment": 0, "adoption_rate": 0,
+                "recommendation_rate": 0, "net_sentiment": 0, "adoption_rate": 0,
             }
 
         interested = sum(1 for n in self.aware_npcs if n.state.stance in ("interested", "willing_to_try", "willing_to_pay"))
@@ -126,14 +126,27 @@ class WorldState:
         would_pay_count = sum(1 for n in self.aware_npcs if n.state.would_pay)
         adopted_count = sum(1 for n in self.aware_npcs if n.state.adopted)
 
+        # recommendation_rate = fraction of interested NPCs who would recommend.
+        # (formerly "viral_coefficient" — renamed for accuracy; this is an advocacy
+        # rate, not a K-factor viral coefficient)
+        rec_rate = round(spreaders / interested, 3) if interested else 0
+
+        # net_sentiment: anchored at 0.45 (curious boundary — the stance where an
+        # NPC transitions from negative/neutral to genuinely interested).
+        # Old formula (avg * 2 - 1) treated 0.5 as neutral, making all-curious
+        # populations appear near-zero, which was misleading.
+        # New formula: 0.45 → 0.0, 1.0 → +1.0, 0.0 → ~-0.82. Clamped to [-1, 1].
+        raw_sentiment = (avg_interest - 0.45) / 0.55
+        sentiment = round(max(-1.0, min(1.0, raw_sentiment)), 3)
+
         return {
             "total_npcs": total,
             "aware_count": aware,
             "awareness_rate": round(aware / total, 3),
             "interest_rate": round(interested / aware, 3) if aware else 0,
             "rejection_rate": round(opposed / aware, 3) if aware else 0,
-            "viral_coefficient": round(spreaders / interested, 3) if interested else 0,
-            "net_sentiment": round(avg_interest * 2 - 1, 3),  # map 0-1 to -1 to 1
+            "recommendation_rate": rec_rate,
+            "net_sentiment": sentiment,
             "would_pay_rate": round(would_pay_count / aware, 3) if aware else 0,
             "adoption_rate": round(adopted_count / aware, 3) if aware else 0,
         }

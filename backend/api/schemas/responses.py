@@ -13,6 +13,7 @@ class SimulationSummary(BaseModel):
     parent_simulation_id: str | None = None
     root_simulation_id: str | None = None
     variant_name: str | None = None
+    simulation_version: str = "v1"
 
 
 class SimulationDetail(BaseModel):
@@ -32,6 +33,8 @@ class SimulationDetail(BaseModel):
     root_simulation_id: str | None = None
     variant_name: str | None = None
     changed_fields: list[str] | None = None
+    simulation_version: str = "v1"
+    error_message: str | None = None
 
 
 class NpcSummary(BaseModel):

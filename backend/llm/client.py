@@ -285,6 +285,248 @@ class LLMClient:
             REPORT_SYSTEM, prompt, model=settings.report_model, max_tokens=4096
         )
 
+    # ── V2 Methods ───────────────────────────────────────────────────────
+
+    def _call_with_metadata(
+        self,
+        system: str,
+        user: str,
+        model: str | None = None,
+        max_tokens: int = 4096,
+    ) -> tuple[str, str]:
+        """Like _call but also returns stop_reason. Returns (text, stop_reason)."""
+        model = model or settings.reaction_model
+        last_exc: Exception | None = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = self.client.messages.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    system=system,
+                    messages=[{"role": "user", "content": user}],
+                )
+                return response.content[0].text, response.stop_reason
+            except (
+                anthropic.APITimeoutError,
+                anthropic.RateLimitError,
+                anthropic.InternalServerError,
+                anthropic.APIConnectionError,
+            ) as exc:
+                last_exc = exc
+                delay = min(RETRY_BASE_DELAY * (2 ** attempt), RETRY_MAX_DELAY)
+                logger.warning(
+                    "LLM call failed (attempt %d/%d, retrying in %.1fs): %s",
+                    attempt + 1, MAX_RETRIES, delay, exc,
+                )
+                time.sleep(delay)
+        raise last_exc  # type: ignore[misc]
+
+    def _repair_truncated_json(self, raw: str) -> dict | list:
+        """Attempt to repair truncated JSON from max_tokens cutoff.
+
+        Strategy 1: Use raw_decode to find the longest valid JSON prefix.
+        Strategy 2: For arrays, extract complete objects one by one.
+        Raises json.JSONDecodeError if nothing is recoverable.
+        """
+        decoder = json.JSONDecoder()
+
+        # Strategy 1: try to decode a complete top-level value from the start
+        try:
+            obj, _ = decoder.raw_decode(raw.strip())
+            logger.warning("Repaired truncated JSON via raw_decode (strategy 1)")
+            return obj
+        except json.JSONDecodeError:
+            pass
+
+        # Strategy 2: for arrays, extract complete objects one by one
+        stripped = raw.strip()
+        if stripped.startswith("["):
+            items: list = []
+            # Skip past the opening bracket
+            idx = 1
+            while idx < len(stripped):
+                # Skip whitespace and commas
+                while idx < len(stripped) and stripped[idx] in " \t\r\n,":
+                    idx += 1
+                if idx >= len(stripped) or stripped[idx] == "]":
+                    break
+                try:
+                    obj, end = decoder.raw_decode(stripped, idx)
+                    items.append(obj)
+                    idx = end
+                except json.JSONDecodeError:
+                    # Hit the truncated part, stop here
+                    break
+
+            if items:
+                logger.warning(
+                    "Repaired truncated JSON array: recovered %d complete objects",
+                    len(items),
+                )
+                return items
+
+        raise json.JSONDecodeError(
+            "Could not recover any valid JSON from truncated response",
+            raw,
+            0,
+        )
+
+    def _call_json_v2(
+        self,
+        system: str,
+        user: str,
+        model: str | None = None,
+        max_tokens: int = 4096,
+    ) -> dict | list:
+        """V2 JSON call with truncation detection and repair."""
+        last_exc: Exception | None = None
+        for attempt in range(MAX_RETRIES):
+            raw = ""
+            try:
+                raw, stop_reason = self._call_with_metadata(
+                    system, user, model, max_tokens,
+                )
+                if stop_reason == "max_tokens":
+                    logger.warning(
+                        "Response truncated (max_tokens=%d), attempting repair",
+                        max_tokens,
+                    )
+                    return self._repair_truncated_json(raw)
+                cleaned = _strip_markdown_fences(raw)
+                return json.loads(cleaned)
+            except json.JSONDecodeError as exc:
+                last_exc = exc
+                logger.warning(
+                    "JSON parse failed (attempt %d/%d): %s — raw[:200]: %s",
+                    attempt + 1, MAX_RETRIES, exc, raw[:200] if raw else "",
+                )
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(RETRY_BASE_DELAY)
+        raise last_exc  # type: ignore[misc]
+
+    def build_world_context(self, idea: dict):
+        """Layer 1: Generate structured market context for V2 simulation."""
+        from backend.llm.prompts import V2_WORLD_BUILDER_SYSTEM, V2_WORLD_BUILDER_USER
+        from backend.simulation.world_builder import WorldContext
+
+        try:
+            prompt = V2_WORLD_BUILDER_USER.format(
+                idea_title=idea.get("title", ""),
+                idea_description=idea.get("description", ""),
+                idea_category=idea.get("category", "general"),
+                idea_stage=idea.get("stage", "concept"),
+                target_audience=idea.get("target_audience", "general public"),
+                price_point=idea.get("price_point", "not specified"),
+            )
+
+            result = self._call_json_v2(
+                V2_WORLD_BUILDER_SYSTEM,
+                prompt,
+                model=settings.report_model,
+                max_tokens=2048,
+            )
+
+            if not isinstance(result, dict):
+                logger.warning(
+                    "build_world_context expected dict, got %s; using default",
+                    type(result),
+                )
+                return WorldContext.default()
+
+            return WorldContext(**result)
+        except Exception:
+            logger.exception("build_world_context failed, returning default")
+            return WorldContext.default()
+
+    def enrich_npcs(
+        self,
+        npc_profiles: list[dict],
+        world_context: dict,
+        idea: dict,
+    ) -> list[dict]:
+        """Layer 2: Generate pre-existing category relationships for each NPC."""
+        from backend.llm.prompts import (
+            V2_NPC_ENRICHMENT_SYSTEM,
+            V2_NPC_ENRICHMENT_USER,
+            format_v2_persona_for_prompt,
+        )
+
+        world_block = "\n".join(f"- {k}: {v}" for k, v in world_context.items())
+        personas_block = "\n---\n".join(
+            format_v2_persona_for_prompt(npc) for npc in npc_profiles
+        )
+
+        prompt = V2_NPC_ENRICHMENT_USER.format(
+            idea_title=idea.get("title", ""),
+            idea_description=idea.get("description", ""),
+            idea_category=idea.get("category", "general"),
+            world_context_block=world_block,
+            personas_block=personas_block,
+        )
+
+        dynamic_max_tokens = max(1024, len(npc_profiles) * 350)
+
+        try:
+            result = self._call_json_v2(
+                V2_NPC_ENRICHMENT_SYSTEM, prompt, max_tokens=dynamic_max_tokens,
+            )
+            if not isinstance(result, list):
+                logger.warning(
+                    "enrich_npcs expected list, got %s", type(result),
+                )
+                return []
+            return result
+        except Exception:
+            logger.exception("enrich_npcs failed")
+            return []
+
+    def v2_batch_react(
+        self,
+        enriched_profiles: list[dict],
+        idea: dict,
+        world_context: dict,
+    ) -> list[dict]:
+        """Layer 3: Get V2 reactions where LLM generates interest_score directly."""
+        from backend.llm.prompts import (
+            V2_REACTION_SYSTEM,
+            V2_REACTION_USER,
+            build_extra_context,
+            format_v2_persona_for_prompt,
+        )
+
+        world_summary = "\n".join(f"- {k}: {v}" for k, v in world_context.items())
+        personas_block = "\n---\n".join(
+            format_v2_persona_for_prompt(npc) for npc in enriched_profiles
+        )
+
+        prompt = V2_REACTION_USER.format(
+            idea_title=idea.get("title", ""),
+            idea_description=idea.get("description", ""),
+            idea_category=idea.get("category", "general"),
+            idea_stage=idea.get("stage", "concept"),
+            target_audience=idea.get("target_audience", "general public"),
+            price_point=idea.get("price_point", "not specified"),
+            extra_context=build_extra_context(idea),
+            world_context_summary=world_summary,
+            personas_block=personas_block,
+        )
+
+        dynamic_max_tokens = max(2048, len(enriched_profiles) * 600)
+
+        try:
+            result = self._call_json_v2(
+                V2_REACTION_SYSTEM, prompt, max_tokens=dynamic_max_tokens,
+            )
+            if not isinstance(result, list):
+                logger.warning(
+                    "v2_batch_react expected list, got %s", type(result),
+                )
+                return []
+            return result
+        except Exception:
+            logger.exception("v2_batch_react failed")
+            return []
+
 
 # Singleton
 llm_client = LLMClient()

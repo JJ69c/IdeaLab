@@ -15,13 +15,17 @@ Frontend (React/Vite) → REST API (FastAPI) → Simulation Engine → LLM Clien
 
 ### Layers
 1. **API Layer** (`api/`) — FastAPI routes, request/response schemas, JWT auth
-2. **Simulation Layer** (`simulation/`) — Engine, NPC logic, propagation, adoption, reporting
-3. **LLM Layer** (`llm/`) — Claude API client with retry, prompt templates, response parsing
+2. **Simulation Layer** (`simulation/`) — V1 + V2 engines, NPC logic, propagation, adoption, reporting
+3. **LLM Layer** (`llm/`) — Claude API client with retry, prompt templates (V1 + V2), response parsing
 4. **Data Layer** (`db/`) — SQLAlchemy 2.0 models, Alembic migrations, dual-driver sessions
 
-### Simulation Engine
+### Simulation Engines
 
-The engine runs a discrete tick-based simulation with 7 phases per tick:
+Two engine versions coexist. The API dispatches based on the `simulation_version` field ("v1" or "v2", default "v1"). V2 imports from V1 — zero V1 files are modified.
+
+#### V1 Engine (Deterministic — `engine.py`)
+
+Discrete tick-based simulation with 7 phases per tick:
 
 1. **Awareness** — NPCs become aware (stratified seed in tick 1, social spread after)
 2. **Reaction** — Each newly-aware NPC evaluates via LLM (batched) + deterministic adjustment
@@ -30,6 +34,18 @@ The engine runs a discrete tick-based simulation with 7 phases per tick:
 5. **Concern Propagation** — Low-interest NPCs dampen peers' enthusiasm (content-aware, 9 themes)
 6. **Spread** — Interested NPCs probabilistically spread awareness to connections
 7. **Adoption** — Deterministic per-NPC barrier model with per-archetype thresholds
+
+#### V2 Engine (LLM-Primary — `engine_v2.py`)
+
+Three-layer architecture: world building → NPC enrichment → tick loop.
+
+**Prep Phase** (before tick loop):
+- **Layer 1: World Construction** — Single LLM call builds a shared `WorldContext` (category description, key players, market maturity, typical price range, common complaints, switching barriers, social perception). Injected into every NPC interaction.
+- **Layer 2: NPC Enrichment** — Batched LLM calls generate per-NPC `NpcCategoryContext` (current solution, satisfaction level, price anchor, category familiarity, openness to switch, pain points). Represents what each NPC already uses/feels before the product is introduced.
+
+**Tick Loop** (same 7 phases, but Phase 2 differs):
+- **Phase 2 (V2 Reaction)** — LLM generates `interest_score` directly (not a hint). Guardrail clamping: score is bounded to `baseline ± 0.30` (`GUARDRAIL_MAX_DEVIATION`). The LLM prompt includes world context + NPC category context for richer reasoning.
+- **Phases 1, 3–7** — Identical to V1 (reused via imports)
 
 ### Dual-Driver Database
 
@@ -41,6 +57,7 @@ Both derived from a single `DATABASE_URL` in config. SQLite fallback uses `aiosq
 
 ### LLM Cost Strategy
 
+**V1:**
 - **Batch reactions**: Group 5-8 NPCs into single LLM calls
 - **Tiered models**: Haiku for NPC reactions, Sonnet for final report
 - **Deterministic math**: Influence, spread, adoption, convergence — no LLM
@@ -48,6 +65,13 @@ Both derived from a single `DATABASE_URL` in config. SQLite fallback uses `aiosq
 - **Discussion uplift cap** (0.40): Interest cannot rise more than 0.40 above NPC baseline via discussions. Prevents hype cascades.
 - **Discussion downdraft cap** (0.50): Interest cannot fall more than 0.50 below baseline via discussions. Prevents skeptic death spirals. Asymmetric — skepticism flows slightly more freely than hype.
 - **Retry with backoff**: 3 retries, 1-8s exponential delay for transient failures
+
+**V2 (additional costs):**
+- **World building**: 1 Sonnet call to construct WorldContext
+- **NPC enrichment**: Batched Sonnet calls to generate per-NPC NpcCategoryContext
+- **LLM-primary reactions**: Per-tick Haiku batches with world context + NPC context in prompt
+- **Guardrail clamping** (±0.30): LLM interest_score bounded to baseline ± GUARDRAIL_MAX_DEVIATION
+- **JSON truncation repair**: Detects max_tokens truncation and recovers partial JSON arrays
 
 ## Database Schema
 
@@ -70,6 +94,8 @@ Managed via Alembic migrations (auto-run on startup).
 - created_at, completed_at
 - parent_simulation_id, root_simulation_id (variant lineage)
 - variant_name, changed_fields (JSON)
+- simulation_version (String(10), default "v1" — "v1" or "v2")
+- error_message (Text, nullable — stores failure details for debugging)
 
 ### assets
 - id (UUID, PK)
@@ -92,7 +118,7 @@ Managed via Alembic migrations (auto-run on startup).
 ### Simulations
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | /api/simulations | Create + run a simulation |
+| POST | /api/simulations | Create + run a simulation (`simulation_version`: "v1" or "v2") |
 | GET | /api/simulations | List simulations (filtered by user if auth'd) |
 | GET | /api/simulations/{id} | Get simulation details |
 | GET | /api/simulations/{id}/stream | SSE event stream (live or replay) |
@@ -120,15 +146,21 @@ Managed via Alembic migrations (auto-run on startup).
 
 ## Frontend Pages
 
-1. **Dashboard** — Simulations grouped by parent/variant hierarchy. Variants stacked under their parent with compact metric cards.
-2. **Inject** — Structured form: idea details, market positioning, assets, strengths/risks. 3 quick-start templates (Notion AI, Oura Ring, Duolingo Max).
-3. **Live Simulation** — Real-time social graph, metrics, event feed via SSE
+1. **Dashboard** — Simulations grouped by parent/variant hierarchy. Variants stacked under their parent with compact metric cards. Each simulation displays a version badge (V1 or V2).
+2. **Inject** — Structured form: idea details, market positioning, assets, strengths/risks. 3 quick-start templates (Notion AI, Oura Ring, Duolingo Max). Engine version selector (V1/V2, default V1). For variants: seed population toggle + version selector.
+3. **Live Simulation** — Real-time social graph, metrics, event feed via SSE. V2 simulations show a prep phase indicator (world building / NPC enrichment) before the tick loop. Error overlay for failed simulations with specific error details.
 4. **Report** — Full results with charts, segment analysis, NPC breakdown. Individual Reactions filterable by seed/all-aware and sortable with seeds-first or others-first. Seed NPCs visually marked.
 5. **Compare** — Side-by-side variant comparison with metrics deltas, population verification (confirms same 30 NPCs), initial seed lists for both runs, archetype impact, AI explanation.
 
-### Variant Seed Mode
+### Variant Options
 
-When creating a variant, users choose between two seed strategies:
+Both Quick Variant (drawer) and Full Variant (Inject page) support:
+
+**Engine version:**
+- **V1 Deterministic** (default) — Fast, consistent, math-driven
+- **V2 LLM-Primary** — Slower, costlier, more nuanced reactions
+
+**Seed population:**
 - **Fresh seeds** (default) — Re-selects the initial 8 exposed NPCs via stratified sampling. Adds realistic market variance but conflates seed selection noise with the product change.
 - **Same seeds** — Locks the variant to use the exact same 8 NPCs that were exposed first in the parent. Isolates the product variable for a controlled A/B comparison.
 

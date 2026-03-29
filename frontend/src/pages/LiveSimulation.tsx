@@ -70,6 +70,25 @@ export default function LiveSimulation() {
         currentTick={state.currentTick}
       />
 
+      {/* Error overlay */}
+      {state.events.some(e => e.type === 'error') && !state.isComplete && (
+        <div className="mx-4 mt-2 glass-panel rounded-2xl border border-red-200 px-5 py-3 flex items-center gap-3">
+          <span className="material-symbols-outlined text-[20px] text-red-500">error</span>
+          <div className="flex-1">
+            <span className="text-sm font-semibold text-red-700">Simulation failed</span>
+            <p className="text-xs text-red-600 mt-0.5">
+              {(state.events.find(e => e.type === 'error')?.data?.message as string) || 'An unexpected error occurred'}
+            </p>
+          </div>
+          <Link
+            to="/dashboard"
+            className="text-xs font-semibold text-red-600 hover:text-red-800 px-3 py-1.5 rounded-lg border border-red-200 hover:border-red-300 transition-colors"
+          >
+            Back to Dashboard
+          </Link>
+        </div>
+      )}
+
       {/* Main content */}
       <div className="flex-1 flex min-h-0">
         {/* Graph area */}

@@ -87,6 +87,12 @@ STANCES = [
 # high enough that mediocre products need uplift. (Calibrated 2026-03-23)
 RECOMMEND_THRESHOLD = 0.68
 
+# Interest score threshold for re-deriving would_pay each tick.
+# 0.75 = willing_to_try boundary: NPCs willing to try a paid product would pay for it.
+# This prevents the stale LLM boolean from permanently blocking adoption for NPCs
+# whose interest climbed through discussions/influence after their initial reaction.
+WOULD_PAY_THRESHOLD = 0.75
+
 
 def derive_stance(interest_score: float, would_pay: bool, aware: bool) -> str:
     """Deterministically map interest score → stance label.
@@ -289,6 +295,17 @@ class NpcState:
         Uses module-level RECOMMEND_THRESHOLD (default 0.68).
         """
         self.would_recommend = self.interest_score >= RECOMMEND_THRESHOLD
+
+    def update_would_pay(self):
+        """Re-derive would_pay from current interest_score.
+
+        Prevents the stale initial LLM judgment from permanently blocking
+        adoption for NPCs whose interest evolved after their initial reaction.
+        NPCs at willing_to_try level (>= 0.75) are willing to pay; those
+        who drop well below that threshold are not.
+        Uses module-level WOULD_PAY_THRESHOLD (default 0.75).
+        """
+        self.would_pay = self.interest_score >= WOULD_PAY_THRESHOLD
 
     def _record_history(self, tick: int):
         self.history.append({

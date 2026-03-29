@@ -22,6 +22,7 @@ interface SimDetail {
   status: string
   metrics: Record<string, number> | null
   parent_simulation_id: string | null
+  root_simulation_id: string | null
   variant_name: string | null
   changed_fields: string[] | null
   report: {
@@ -600,6 +601,7 @@ export default function Report() {
           idea_category: sim.idea_category || 'general',
           idea_metadata: sim.idea_metadata || {},
           config: sim.config || {},
+          parent_simulation_id: sim.parent_simulation_id,
         }}
       />
     </div>

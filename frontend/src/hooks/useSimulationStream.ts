@@ -191,6 +191,11 @@ function reducer(state: SimulationState, action: Action): SimulationState {
       return { ...state, isRunning: false, isComplete: true, report, events: [...state.events, payload] }
     }
 
+    case 'v2_progress': {
+      // V2 prep phase progress events — just store them for UI display
+      return { ...state, events: [...state.events, payload] }
+    }
+
     case 'error': {
       return { ...state, isRunning: false, events: [...state.events, payload] }
     }

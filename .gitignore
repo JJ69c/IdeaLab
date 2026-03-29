@@ -47,3 +47,10 @@ process_doc/
 
 # Confidential business docs
 docs/business/
+
+# Internal design docs (not for public repo)
+docs/technical/v2_design.md
+CLAUDE_ONBOARDING.md
+
+# Debug artifacts
+debug_thread_trace.txt

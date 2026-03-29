@@ -530,3 +530,215 @@ def format_persona_for_prompt(npc: dict) -> str:
         f"Style: {npc.get('communication_style', 'neutral')}",
     ])
     return "\n".join(lines)
+
+
+# ===========================================================================
+# V2 Prompt Templates — LLM-primary scoring architecture
+# ===========================================================================
+
+V2_WORLD_BUILDER_SYSTEM = """You are a market research analyst building a realistic world context for a product simulation.
+
+Given a product idea, generate the shared market knowledge that an average person in this category already possesses. This is NOT about the product itself -- it is about the WORLD the product enters.
+
+Think about what a normal consumer already knows:
+- What brands exist in this space?
+- What do people typically pay?
+- What are the common frustrations?
+- What are the barriers to switching from what they already use?
+
+Be realistic and grounded. For well-known categories (e.g., kitchen knives, streaming services), use real brand names and real price ranges. For niche or new categories, describe the landscape honestly.
+
+Rules:
+- Lists should have 3-5 items each (not more)
+- Keep descriptions concise (1-2 sentences max per field)
+- market_maturity must be exactly one of: emerging, growing, mature, declining
+- Output valid JSON only. No markdown, no explanation."""
+
+V2_WORLD_BUILDER_USER = """## Product Idea
+
+Title: {idea_title}
+Description: {idea_description}
+Category: {idea_category}
+Stage: {idea_stage}
+Target Audience: {target_audience}
+Price Point: {price_point}
+Existing Alternatives: {existing_alternatives}
+
+## Task
+
+Generate the shared world context for the category above. What does an average consumer already know about this market?
+
+Return JSON:
+{{
+  "category_description": "1-2 sentence description of this product category from a consumer perspective",
+  "key_players": ["brand or product name that consumers would recognize"],
+  "market_maturity": "emerging | growing | mature | declining",
+  "typical_price_range": "what consumers expect to pay (e.g. $10-$30/month)",
+  "common_purchase_triggers": ["what makes someone buy in this category"],
+  "common_complaints": ["what consumers commonly dislike about current options"],
+  "switching_barriers": ["what stops people from trying something new"],
+  "trend_awareness": "1-2 sentence summary of what consumers have heard lately about this category",
+  "social_perception": "how is using/buying products in this category perceived socially",
+  "trust_factors": ["what makes consumers trust a product in this category"]
+}}"""
+
+V2_NPC_ENRICHMENT_SYSTEM = """You are enriching simulated personas with pre-existing relationships to a product category.
+
+Each persona already has a personality, archetype, income level, and interests. Your job is to give each persona a REALISTIC pre-existing relationship with the category BEFORE they encounter the new product.
+
+Think about:
+- What solution do they currently use (if any)?
+- How satisfied are they with it?
+- What price do they consider "normal" for this category?
+- How familiar are they with the category?
+- How open are they to trying something new?
+
+Rules:
+- Stay consistent with the persona's personality traits. A price-sensitive person should have a lower price anchor. A tech-savvy early adopter should have higher category familiarity.
+- personal_connection must be 1 short sentence max (or null if none).
+- pain_points must have 1-2 items, each under 15 words.
+- satisfaction_level must be exactly one of: very_dissatisfied, dissatisfied, neutral, satisfied, very_satisfied
+- category_familiarity must be exactly one of: unaware, heard_of_it, casual_user, regular_user, power_user
+- openness_to_switch must be exactly one of: locked_in, reluctant, open_if_better, actively_looking
+- Output valid JSON only. No markdown, no explanation."""
+
+V2_NPC_ENRICHMENT_USER = """## Category
+{idea_category}
+
+## World Context
+{world_context_block}
+
+## Personas to Enrich
+
+{personas_block}
+
+## Task
+
+For each persona, generate their pre-existing relationship with the category above.
+
+Return a JSON array:
+[
+  {{
+    "npc_id": "the persona's id",
+    "current_solution": "what they currently use (e.g. brand name, generic description, or 'nothing')",
+    "satisfaction_level": "very_dissatisfied | dissatisfied | neutral | satisfied | very_satisfied",
+    "price_anchor": "what they consider a normal price (e.g. '$15/month', '$200')",
+    "category_familiarity": "unaware | heard_of_it | casual_user | regular_user | power_user",
+    "openness_to_switch": "locked_in | reluctant | open_if_better | actively_looking",
+    "personal_connection": "1 short sentence about a personal experience with this category, or null",
+    "pain_points": ["1-2 specific frustrations with their current solution, under 15 words each"]
+  }}
+]"""
+
+V2_REACTION_SYSTEM = """You are simulating how different people react to a new product or idea.
+You will receive persona profiles with their pre-existing category relationships, and a description of an idea.
+For each persona, generate a realistic reaction INCLUDING a direct interest score.
+
+## Interest Score Calibration Guide
+
+- 0.00-0.10: Actively opposed. This product conflicts with their values or needs.
+- 0.10-0.20: Very skeptical. See no reason this is better than what they have.
+- 0.20-0.35: Mildly negative or indifferent. Might glance at it but would not engage.
+- 0.35-0.50: Neutral with slight curiosity. Would read more but not commit.
+- 0.50-0.65: Genuinely interested. Would try it, visit the website, consider a purchase.
+- 0.65-0.80: Strongly interested. Would likely buy/sign up if convenient.
+- 0.80-0.90: Very enthusiastic. Would actively seek it out and tell friends.
+- 0.90-1.00: Extremely enthusiastic. Would pre-order, evangelize, and feel personally excited.
+
+## Important Scoring Rules
+
+- MOST reactions should cluster between 0.25 and 0.55. The average simulated population is mildly interested at best.
+- Scores above 0.70 require STRONG justification: the persona must have a clear unmet need, high openness to switch, AND the product must directly address their pain points.
+- Concept-stage ideas should rarely score above 0.60 — unproven products get skepticism by default.
+- Always reference the persona's current_solution and price_anchor when scoring. A satisfied user of a competitor scores lower. A person whose price anchor is well below the asking price scores lower.
+- Satisfied people with locked-in switching barriers should almost never score above 0.40.
+
+Rules:
+- Stay in character. A skeptic should be skeptical. An early adopter should be excited.
+- Reference the persona's category context: their current solution, satisfaction, and pain points.
+- Reactions should feel distinct across personas.
+- reasoning must be 2 sentences MAX.
+- objections must have 1-2 items, each under 15 words.
+- emotional_reaction must be exactly one of: excited, intrigued, meh, doubtful, annoyed
+- Output valid JSON only. No markdown, no explanation."""
+
+V2_REACTION_USER = """## World Context
+{world_context_summary}
+
+## Idea Being Introduced
+
+Title: {idea_title}
+Description: {idea_description}
+Category: {idea_category}
+Stage: {idea_stage}
+Target Audience: {target_audience}
+Price Point: {price_point}
+{extra_context}
+## Personas to React
+
+{personas_block}
+
+## Output Format
+
+Return a JSON array with one object per persona, in the same order:
+[
+  {{
+    "npc_id": "the persona's id",
+    "interest_score": 0.0 to 1.0 (use the calibration guide above),
+    "reasoning": "2 sentences MAX explaining WHY this person feels this way, referencing their category context",
+    "objections": ["1-2 specific concerns under 15 words each"],
+    "would_pay": true or false,
+    "would_recommend": true or false,
+    "emotional_reaction": "excited | intrigued | meh | doubtful | annoyed"
+  }}
+]"""
+
+
+def format_v2_persona_for_prompt(npc: dict) -> str:
+    """Format a single NPC profile for V2 prompts, including category context.
+
+    Like format_persona_for_prompt but adds a '--- Category Context ---' section
+    when the npc dict contains a 'category_context' key with enrichment data
+    from the Layer 2 NPC enrichment step.
+    """
+    personality = npc.get("personality", {})
+    archetype = npc.get("archetype", "")
+    decision_style = npc.get("decision_style", "")
+
+    lines = [
+        f"ID: {npc['id']}",
+        f"Name: {npc['name']}, Age: {npc['age']}, Occupation: {npc['occupation']}",
+        f"Income: {npc.get('income_level', 'middle')}",
+    ]
+    if archetype:
+        lines.append(f"Archetype: {archetype}")
+    if decision_style:
+        lines.append(f"Decision style: {decision_style}")
+    lines.extend([
+        f"Personality: openness={personality.get('openness', 0.5)}, "
+        f"skepticism={personality.get('skepticism', 0.5)}, "
+        f"tech_savviness={personality.get('tech_savviness', 0.5)}, "
+        f"price_sensitivity={personality.get('price_sensitivity', 0.5)}, "
+        f"novelty_seeking={personality.get('novelty_seeking', 0.5)}",
+        f"Interests: {', '.join(npc.get('interests', []))}",
+        f"Values: {', '.join(npc.get('values', []))}",
+        f"Pain points: {', '.join(npc.get('pain_points', []))}",
+        f"Style: {npc.get('communication_style', 'neutral')}",
+    ])
+
+    # Append category context from Layer 2 enrichment if available
+    cat_ctx = npc.get("category_context")
+    if cat_ctx and isinstance(cat_ctx, dict):
+        lines.append("--- Category Context ---")
+        lines.append(f"Current solution: {cat_ctx.get('current_solution', 'unknown')}")
+        lines.append(f"Satisfaction: {cat_ctx.get('satisfaction_level', 'neutral')}")
+        lines.append(f"Price anchor: {cat_ctx.get('price_anchor', 'unknown')}")
+        lines.append(f"Familiarity: {cat_ctx.get('category_familiarity', 'unknown')}")
+        lines.append(f"Openness to switch: {cat_ctx.get('openness_to_switch', 'unknown')}")
+        if cat_ctx.get("personal_connection"):
+            lines.append(f"Personal connection: {cat_ctx['personal_connection']}")
+        pain_points = cat_ctx.get("pain_points", [])
+        if pain_points:
+            lines.append(f"Category pain points: {'; '.join(pain_points)}")
+
+    return "\n".join(lines)

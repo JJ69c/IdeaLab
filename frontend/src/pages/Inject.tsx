@@ -360,9 +360,10 @@ export default function Inject() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [variantParent, setVariantParent] = useState<{
-    id: string; idea_title: string
+    id: string; idea_title: string; is_variant: boolean
   } | null>(null)
   const [variantName, setVariantName] = useState('')
+  const [useParentSeeds, setUseParentSeeds] = useState(false)
   const [prefilling, setPrefilling] = useState(!!variantOf)
 
   // --- Form state ---
@@ -383,6 +384,7 @@ export default function Inject() {
     num_ticks: 8,
     population_size: 30,
     seed_count: 8,
+    simulation_version: 'v1' as 'v1' | 'v2',
   })
 
   const update = (field: string, value: string | number) =>
@@ -394,7 +396,7 @@ export default function Inject() {
     fetch(`/api/simulations/${variantOf}`)
       .then(r => r.json())
       .then(data => {
-        setVariantParent({ id: data.id, idea_title: data.idea_title })
+        setVariantParent({ id: data.id, idea_title: data.idea_title, is_variant: !!data.parent_simulation_id })
         const meta = data.idea_metadata || {}
         const config = data.config || {}
 
@@ -419,6 +421,7 @@ export default function Inject() {
           num_ticks: config.num_ticks ?? 8,
           population_size: config.population_size ?? 30,
           seed_count: config.seed_count ?? 8,
+          simulation_version: (data.simulation_version || 'v1') as 'v1' | 'v2',
         })
         setPrefilling(false)
       })
@@ -487,6 +490,13 @@ export default function Inject() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Validate population >= initial exposure
+    if (form.seed_count > form.population_size) {
+      setError(`Initial Exposure (${form.seed_count}) cannot exceed Population Size (${form.population_size}). Please adjust under Controls.`)
+      return
+    }
+
     setLoading(true)
     setError('')
 
@@ -521,10 +531,12 @@ export default function Inject() {
           seed_count: form.seed_count,
         },
         asset_refs: assetRefs,
+        simulation_version: form.simulation_version,
       }
       if (variantOf) {
         body.parent_simulation_id = variantOf
         if (variantName.trim()) body.variant_name = variantName.trim()
+        body.use_parent_seeds = useParentSeeds
       }
 
       const res = await fetch('/api/simulations', {
@@ -533,19 +545,25 @@ export default function Inject() {
         body: JSON.stringify(body),
       })
 
-      if (!res.ok) throw new Error(`Server error: ${res.status}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        const detail = body?.detail || `Server error: ${res.status}`
+        throw new Error(detail)
+      }
 
       const data = await res.json()
       navigate(`/simulation/${data.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
+      const msg = err instanceof Error ? err.message : 'Something went wrong'
+      setError(msg.includes('fetch') ? 'Could not reach server — is the backend running?' : msg)
       setLoading(false)
     }
   }
 
-  const estimatedCost = (form.num_ticks * form.population_size * 0.0001 + 0.02).toFixed(2)
-  const durationMin = Math.ceil(form.num_ticks * form.population_size * 0.12)
-  const durationMax = Math.ceil(form.num_ticks * form.population_size * 0.2)
+  const v2Multiplier = form.simulation_version === 'v2' ? 3 : 1
+  const estimatedCost = ((form.num_ticks * form.population_size * 0.0001 + 0.02) * v2Multiplier).toFixed(2)
+  const durationMin = Math.ceil(form.num_ticks * form.population_size * 0.12 * v2Multiplier)
+  const durationMax = Math.ceil(form.num_ticks * form.population_size * 0.2 * v2Multiplier)
 
   if (prefilling) {
     return (
@@ -582,6 +600,11 @@ export default function Inject() {
             >
               {variantParent.idea_title}
             </Link>
+            {variantParent.is_variant && (
+              <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-orange-50 text-orange-600">
+                variant
+              </span>
+            )}
           </div>
           <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-lg bg-primary/10 text-primary">
             What-If
@@ -997,11 +1020,48 @@ export default function Inject() {
               <span>{Math.min(15, form.population_size)} (broad launch)</span>
             </div>
           </div>
+
+          {/* Engine Version Toggle */}
+          <div>
+            <FieldLabel label="Engine Version" hint="V2 uses LLM-driven world building (experimental)" />
+            <div className="flex gap-3 mt-1">
+              <button
+                type="button"
+                onClick={() => update('simulation_version', 'v1')}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all ${
+                  form.simulation_version === 'v1'
+                    ? 'bg-primary/10 border-primary/40 text-primary'
+                    : 'border-outline-variant/30 text-on-surface-variant hover:border-outline-variant/50'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[16px]">calculate</span>
+                V1 Deterministic
+              </button>
+              <button
+                type="button"
+                onClick={() => update('simulation_version', 'v2')}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all ${
+                  form.simulation_version === 'v2'
+                    ? 'bg-purple-500/10 border-purple-400/40 text-purple-700'
+                    : 'border-outline-variant/30 text-on-surface-variant hover:border-outline-variant/50'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                V2 LLM-Primary
+              </button>
+            </div>
+            {form.simulation_version === 'v2' && (
+              <p className="text-[11px] text-purple-600 mt-2 flex items-start gap-1.5">
+                <span className="material-symbols-outlined text-[14px] mt-0.5">info</span>
+                V2 builds a world context and enriches each NPC before simulation. Slower and costlier, but more nuanced reactions.
+              </p>
+            )}
+          </div>
         </SectionPanel>
 
-        {/* ---- Variant Name (only for variants) ---- */}
+        {/* ---- Variant Options (only for variants) ---- */}
         {variantOf && (
-          <SectionPanel number={6} title="Variant Label" subtitle="What are you testing with this variant?" icon="science">
+          <SectionPanel number={6} title="Variant Options" subtitle="Control how this variant relates to the original" icon="science">
             <div>
               <FieldLabel label="Variant Name" hint="optional label for this variant" />
               <input
@@ -1012,6 +1072,47 @@ export default function Inject() {
                 value={variantName}
                 onChange={e => setVariantName(e.target.value)}
               />
+            </div>
+
+            {/* Seed Population Mode */}
+            <div>
+              <FieldLabel label="Starting Exposure" hint="who hears about the idea first" />
+              <div className="flex gap-3 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setUseParentSeeds(false)}
+                  className={`flex-1 flex flex-col items-start gap-1 px-4 py-2.5 rounded-xl text-left border transition-all ${
+                    !useParentSeeds
+                      ? 'bg-primary/10 border-primary/40 text-primary'
+                      : 'border-outline-variant/30 text-on-surface-variant hover:border-outline-variant/50'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-semibold">
+                    <span className="material-symbols-outlined text-[14px]">shuffle</span>
+                    Fresh seeds
+                  </span>
+                  <span className="text-[10px] text-outline leading-snug">
+                    Re-select who hears first — adds realistic variance
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUseParentSeeds(true)}
+                  className={`flex-1 flex flex-col items-start gap-1 px-4 py-2.5 rounded-xl text-left border transition-all ${
+                    useParentSeeds
+                      ? 'bg-primary/10 border-primary/40 text-primary'
+                      : 'border-outline-variant/30 text-on-surface-variant hover:border-outline-variant/50'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-semibold">
+                    <span className="material-symbols-outlined text-[14px]">lock</span>
+                    Same seeds
+                  </span>
+                  <span className="text-[10px] text-outline leading-snug">
+                    Fix who hears first — isolates the product change
+                  </span>
+                </button>
+              </div>
             </div>
           </SectionPanel>
         )}

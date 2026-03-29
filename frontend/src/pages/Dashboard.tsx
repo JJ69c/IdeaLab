@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 interface SimSummary {
@@ -12,7 +12,9 @@ interface SimSummary {
     adoption_rate?: number
   } | null
   parent_simulation_id: string | null
+  root_simulation_id: string | null
   variant_name: string | null
+  simulation_version: string
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -92,36 +94,53 @@ export default function Dashboard() {
     }
   }
 
-  // Build a lookup of sim id → title so variants can show their parent's name
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
+
+  // Build a lookup of sim id → title
   const titleMap: Record<string, string> = {}
   for (const sim of sims) {
     titleMap[sim.id] = sim.idea_title
   }
 
-  // Build groups: parents with their variants nested beneath them
-  // Orphan variants (parent not in the list) go to the end as standalone cards
-  const parentIds = new Set(sims.filter(s => !s.parent_simulation_id).map(s => s.id))
-  const groups: SimGroup[] = []
-  const orphanVariants: SimSummary[] = []
+  // Flat grouping by root: all variants appear one level under their root simulation.
+  const { groups, orphanVariants } = useMemo(() => {
+    const gs: SimGroup[] = []
+    const orphans: SimSummary[] = []
 
-  // First pass: collect parents
-  for (const sim of sims) {
-    if (!sim.parent_simulation_id) {
-      groups.push({ parent: sim, variants: [] })
-    }
-  }
-
-  // Second pass: assign variants to their parents
-  for (const sim of sims) {
-    if (sim.parent_simulation_id) {
-      if (parentIds.has(sim.parent_simulation_id)) {
-        const group = groups.find(g => g.parent.id === sim.parent_simulation_id)
-        if (group) group.variants.push(sim)
-      } else {
-        orphanVariants.push(sim)
+    // First pass: index root simulations (no parent)
+    for (const sim of sims) {
+      if (!sim.parent_simulation_id) {
+        gs.push({ parent: sim, variants: [] })
       }
     }
-  }
+
+    // Second pass: assign ALL variants flat under their root
+    for (const sim of sims) {
+      if (sim.parent_simulation_id) {
+        const rootId = sim.root_simulation_id || sim.parent_simulation_id
+        const group = gs.find(g => g.parent.id === rootId)
+        if (group) {
+          group.variants.push(sim)
+        } else {
+          orphans.push(sim)
+        }
+      }
+    }
+
+    // Sort groups by root's created_at
+    const dir = sortOrder === 'newest' ? -1 : 1
+    gs.sort((a, b) => dir * (new Date(a.parent.created_at).getTime() - new Date(b.parent.created_at).getTime()))
+
+    // Sort variants within each group by created_at (latest first always)
+    for (const g of gs) {
+      g.variants.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    }
+
+    // Sort orphans same as groups
+    orphans.sort((a, b) => dir * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()))
+
+    return { groups: gs, orphanVariants: orphans }
+  }, [sims, sortOrder])
 
   if (loading) {
     return (
@@ -140,13 +159,27 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-on-surface tracking-tight">Simulations</h1>
           <p className="text-on-surface-variant mt-1">Manage and monitor your active market experiments.</p>
         </div>
-        <Link
-          to="/inject"
-          className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-container text-on-primary px-6 py-3 rounded-xl text-sm font-semibold shadow-xl shadow-primary/20 hover:scale-[0.98] active:scale-95 transition-transform"
-        >
-          <span className="material-symbols-outlined text-[18px]">add</span>
-          Launch New
-        </Link>
+        <div className="flex items-center gap-3">
+          {sims.length > 0 && (
+            <button
+              onClick={() => setSortOrder(prev => prev === 'newest' ? 'oldest' : 'newest')}
+              className="flex items-center gap-1.5 text-sm text-on-surface-variant border border-outline-variant/30 px-3 py-2 rounded-lg hover:bg-surface-container transition-colors"
+              title={`Sorted by ${sortOrder === 'newest' ? 'newest first' : 'oldest first'}`}
+            >
+              <span className="material-symbols-outlined text-[16px]">
+                {sortOrder === 'newest' ? 'arrow_downward' : 'arrow_upward'}
+              </span>
+              {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
+            </button>
+          )}
+          <Link
+            to="/inject"
+            className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-container text-on-primary px-6 py-3 rounded-xl text-sm font-semibold shadow-xl shadow-primary/20 hover:scale-[0.98] active:scale-95 transition-transform"
+          >
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            Launch New
+          </Link>
+        </div>
       </div>
 
       {sims.length === 0 ? (
@@ -190,6 +223,9 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2">
                         <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-lg ${statusStyle.bg} ${statusStyle.text}`}>
                           {statusStyle.label}
+                        </span>
+                        <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-lg ${sim.simulation_version === 'v2' ? 'bg-purple-50 text-purple-700' : 'bg-slate-50 text-slate-500'}`}>
+                          {sim.simulation_version?.toUpperCase() || 'V1'}
                         </span>
                       </div>
                       <button
@@ -264,6 +300,10 @@ export default function Dashboard() {
                               {/* Variant badge */}
                               <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md bg-orange-50 text-orange-700">
                                 {variant.variant_name || 'VARIANT'}
+                              </span>
+                              {/* Engine version badge */}
+                              <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md ${variant.simulation_version === 'v2' ? 'bg-purple-50 text-purple-700' : 'bg-slate-50 text-slate-500'}`}>
+                                {variant.simulation_version?.toUpperCase() || 'V1'}
                               </span>
                               {/* Metrics as compact text */}
                               {variant.metrics && (
@@ -340,6 +380,9 @@ export default function Dashboard() {
                       </span>
                       <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-lg bg-orange-50 text-orange-700">
                         {sim.variant_name || 'VARIANT'}
+                      </span>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-lg ${sim.simulation_version === 'v2' ? 'bg-purple-50 text-purple-700' : 'bg-slate-50 text-slate-500'}`}>
+                        {sim.simulation_version?.toUpperCase() || 'V1'}
                       </span>
                     </div>
                     <button

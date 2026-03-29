@@ -4,10 +4,16 @@
 
 A synthetic population idea-testing engine. Inject a product idea into a simulated society of 30 AI-driven NPCs across 8 behaviorally distinct archetypes. The engine runs a tick-based simulation where NPCs evaluate the product, discuss it with peers, spread awareness through social connections, and ultimately adopt or reject it. The output is a structured insight report covering adoption likelihood, objections, viral potential, and segment analysis.
 
+Two engine versions are available:
+- **V1 (Deterministic)** — Math-primary with bounded LLM hints. Fast, consistent, cheap (~$0.15/run).
+- **V2 (LLM-Primary)** — LLM-driven world building and nuanced reactions with math guardrails. Slower, costlier (~$0.30–$0.80/run), but more contextually rich.
+
 ## How It Works
 
 ```
-You describe an idea
+You describe an idea → choose engine version (V1 or V2)
+
+V1 (Deterministic):
   -> Engine builds a product profile (8 normalized dimensions)
   -> Optional: LLM vision analyzes uploaded reference assets (7 perception signals)
   -> Optional: Engine classifies listed alternatives into competition context (5 dimensions)
@@ -22,6 +28,15 @@ You describe an idea
   -> Convergence tracking classifies outcome
   -> LLM generates narrative report
   -> Results streamed via SSE, persisted to PostgreSQL
+
+V2 (LLM-Primary):
+  -> Layer 1: LLM builds shared WorldContext (market reality, key players, price ranges)
+  -> Layer 2: LLM enriches each NPC with NpcCategoryContext (current solution, satisfaction, pain points)
+  -> Tick loop runs with LLM-primary scoring:
+      Phase 1: Same awareness mechanics as V1
+      Phase 2: LLM generates interest_score directly, clamped to baseline ± 0.30 (guardrail)
+      Phases 3-6: Same as V1 (discussion, influence, spread, adoption)
+  -> Same convergence + report pipeline as V1
 ```
 
 ### Evaluation Pipeline
@@ -90,7 +105,7 @@ Archetype thresholds range from 0.55 (Trend Adopter) to 0.70 (Health Evaluator, 
 | Backend | Python 3.10+, FastAPI, SQLAlchemy 2.0, Alembic |
 | Frontend | React 18, TypeScript, Vite, TailwindCSS, Recharts |
 | Database | PostgreSQL 14+ (production), SQLite (dev fallback) |
-| AI | Claude API (Haiku for NPC reactions, Sonnet for reports) |
+| AI | Claude API (Haiku for NPC reactions, Sonnet for reports + V2 world building) |
 
 ## Getting Started
 
@@ -131,10 +146,14 @@ Open **http://localhost:5173**.
 ## Usage
 
 1. **Define your idea** — Fill in the structured form: idea details, market positioning, optional reference assets, strengths/risks
-2. **Configure** — Set rounds (3-20), population (10-50), and initial exposure (1-15)
-3. **Launch** — Watch the live simulation: interactive social graph, real-time metrics, event feed
+2. **Configure** — Set rounds (3-20), population (10-50), initial exposure (1-15), and engine version (V1 or V2)
+3. **Launch** — Watch the live simulation: interactive social graph, real-time metrics, event feed. V2 shows a prep phase (world building + NPC enrichment) before the tick loop starts.
 4. **Review report** — Adoption breakdown, segment analysis, objections, recommendations
-5. **Create variants** — Quick Variant (change 6 key params) or Full Variant. Choose **Fresh seeds** (realistic variance) or **Same seeds** (controlled A/B, isolates the product change). Compare side-by-side with metrics deltas, population verification, and AI explanation.
+5. **Create variants** — Quick Variant (change 6 key params) or Full Variant. Both support:
+   - **Engine version** — V1 Deterministic or V2 LLM-Primary
+   - **Fresh seeds** (default) — Re-selects who hears first (realistic variance)
+   - **Same seeds** — Locks initial exposure to parent's seeds (controlled A/B, isolates the product change)
+   - Compare side-by-side with metrics deltas, population verification, and AI explanation.
 6. **Chat with NPCs** — Click any NPC in the graph to ask questions. Responses are grounded in their simulation state.
 
 ## Project Structure
@@ -147,7 +166,9 @@ idealab/
 │   ├── db/                        # SQLAlchemy models (User, Simulation, Asset, Event)
 │   ├── llm/                       # Claude API client with retry, prompts
 │   ├── simulation/
-│   │   ├── engine.py              # Tick loop, seeding, discussion cap
+│   │   ├── engine.py              # V1 tick loop, seeding, discussion cap
+│   │   ├── engine_v2.py           # V2 tick loop (LLM-primary scoring, world context)
+│   │   ├── world_builder.py       # V2 WorldContext + NpcCategoryContext dataclasses
 │   │   ├── evaluation.py          # Archetype baselines, individual deltas
 │   │   ├── npc.py                 # NPC state, stance derivation
 │   │   ├── population.py          # Archetype-based generation, social graph
@@ -187,10 +208,15 @@ Covers: archetype baseline separation, price sensitivity, individual delta bound
 
 ## Cost
 
-Each simulation targets **under $0.15** in API costs:
+**V1** targets **under $0.15** per run:
 - Haiku for all per-tick operations (batched, fast, cheap)
 - Sonnet only for the final report (1 call)
 - Deterministic math for influence, spread, and adoption (no LLM)
+
+**V2** costs **$0.30–$0.80** per run:
+- Sonnet for world building (1 call) and NPC enrichment (batched)
+- Haiku for per-tick LLM-primary reactions (batched)
+- Same Sonnet final report
 
 ## Authentication
 
@@ -220,7 +246,7 @@ Auth is currently optional — unauthenticated requests still work but simulatio
 |--------|----------|-------------|
 | `POST` | `/api/auth/register` | Create account (returns JWT) |
 | `POST` | `/api/auth/login` | Login (returns JWT) |
-| `POST` | `/api/simulations` | Create and run a simulation |
+| `POST` | `/api/simulations` | Create and run a simulation (supports `simulation_version`: "v1" or "v2") |
 | `GET` | `/api/simulations` | List past simulations (filtered by user if auth'd) |
 | `GET` | `/api/simulations/{id}` | Get simulation details |
 | `GET` | `/api/simulations/{id}/stream` | SSE event stream (live or replay) |

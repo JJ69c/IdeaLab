@@ -93,7 +93,7 @@ export interface SimMetrics {
   awareness_rate: number
   interest_rate: number
   rejection_rate: number
-  viral_coefficient: number
+  recommendation_rate: number
   net_sentiment: number
   would_pay_rate: number
   adoption_rate: number

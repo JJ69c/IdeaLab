@@ -73,3 +73,8 @@ class CreateSimulationRequest(BaseModel):
             "Ignored when parent_simulation_id is not set."
         ),
     )
+    simulation_version: str = Field(
+        default="v1",
+        pattern=r"^(v1|v2)$",
+        description="Engine version: 'v1' (deterministic) or 'v2' (LLM-primary)",
+    )

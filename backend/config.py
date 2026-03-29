@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     max_discussions_per_tick: int = 5
     reaction_batch_size: int = 6
 
+    # V2 world-builder model (heavier model for world/enrichment calls)
+    v2_world_builder_model: str = "claude-sonnet-4-6"
+
     # Asset uploads
     upload_dir: str = "uploads"
     max_upload_size_mb: int = 5

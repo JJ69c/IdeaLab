@@ -368,11 +368,21 @@ def _run_tick(world: WorldState, tick: int, emit: EventCallback):
         target_concerns[evt.target_id].append(evt)
 
     # Apply aggregated deltas and emit events with per-source details
+    baselines = getattr(world, "_npc_baselines", {})
     for target_id, events in target_concerns.items():
         target_npc = world.npcs.get(target_id)
         if not target_npc:
             continue
         total_delta = sum(e.final_delta for e in events)
+        # Apply same downdraft floor as discussion cap so concern propagation
+        # cannot push an NPC below their baseline minus the cap.
+        # Without this, stacked concern events from multiple skeptics bypass
+        # the discussion cap and can still cause death spirals.
+        if DISCUSSION_DOWNDRAFT_CAP > 0 and total_delta < 0:
+            target_baseline = baselines.get(target_id, 0.5)
+            concern_floor = target_baseline - DISCUSSION_DOWNDRAFT_CAP
+            room = min(0.0, concern_floor - target_npc.state.interest_score)
+            total_delta = max(total_delta, room)
         old_interest = target_npc.state.interest_score
         new_stance = target_npc.state.apply_influence(total_delta, tick)
         emit({
@@ -406,23 +416,30 @@ def _run_tick(world: WorldState, tick: int, emit: EventCallback):
                 },
             })
 
-    # Write PeerWarning memory per individual concern event (preserves source attribution)
+    # Write PeerWarning memory per individual concern event (preserves source attribution).
+    # No guard on objection_content: NPCs dampened by general negativity (no explicit
+    # objection) still get a memory so Ask NPC responses can explain why their interest
+    # dropped, even when the source had no articulated objection.
     for evt in (e for evts in target_concerns.values() for e in evts):
         target_npc = world.npcs.get(evt.target_id)
-        if target_npc and evt.objection_content:
+        if target_npc:
+            content = evt.objection_content if evt.objection_content else "expressed general skepticism about the product"
             target_npc.state.record_peer_warning(PeerWarning(
                 tick=tick,
                 source_id=evt.source_id,
                 source_name=evt.source_name,
                 source_archetype=evt.source_archetype,
                 theme=evt.theme,
-                content=evt.objection_content,
+                content=content,
                 delta=evt.final_delta,
             ))
 
-    # --- Re-derive would_recommend before spread (interest may have changed) ---
+    # --- Re-derive would_recommend and would_pay before spread (interest may have changed) ---
+    # would_pay re-derivation prevents the stale initial LLM boolean from
+    # permanently blocking adoption for NPCs whose interest evolved post-reaction.
     for npc in world.aware_npcs:
         npc.state.update_would_recommend()
+        npc.state.update_would_pay()
 
     # --- Phase 5: Spread ---
     world.pending_spreads = compute_spreads(world)

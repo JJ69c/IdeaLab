@@ -19,6 +19,38 @@ export default function TickProgress({ currentTick, maxTicks, isRunning, isCompl
     [events, currentTick],
   )
 
+  // V2 prep phase: show world-building / enrichment progress
+  const v2Progress = useMemo(() => {
+    const v2Events = events.filter(e => e.type === 'v2_progress')
+    if (v2Events.length === 0) return null
+    const latest = v2Events[v2Events.length - 1]
+    return latest.data as { phase: string; message: string }
+  }, [events])
+
+  // If we're in V2 prep phase (no ticks started yet), show prep UI
+  if (v2Progress && currentTick === 0 && isRunning) {
+    return (
+      <div className="flex items-center gap-4">
+        <h2 className="font-semibold text-on-surface truncate max-w-xs tracking-tight">
+          {ideaTitle || 'Simulation'}
+        </h2>
+        <div className="flex items-center gap-3 flex-1">
+          <span className="text-xs text-purple-600 whitespace-nowrap font-medium flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+            {v2Progress.phase}
+          </span>
+          <span className="text-xs text-on-surface-variant truncate max-w-md">
+            {v2Progress.message}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+          <span className="text-xs text-purple-600 font-medium">V2 Prep</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex items-center gap-4">
       <h2 className="font-semibold text-on-surface truncate max-w-xs tracking-tight">
