@@ -58,6 +58,7 @@ def run_simulation_v2(
     asset_signals=None,
     population_override: list[dict] | None = None,
     seed_override: list[str] | None = None,
+    competitor_profiles: list[dict] | None = None,
 ) -> dict:
     """Run a full V2 simulation with world-aware LLM-primary reactions.
 
@@ -78,6 +79,7 @@ def run_simulation_v2(
         asset_signals=asset_signals,
         population_override=population_override,
         seed_override=seed_override,
+        competitor_profiles=competitor_profiles,
     )
     tracker = ConvergenceTracker()
 

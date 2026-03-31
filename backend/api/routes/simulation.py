@@ -73,7 +73,12 @@ async def create_simulation(
         "differentiator": request.idea.differentiator,
         "known_strengths": request.idea.known_strengths,
         "known_risks": request.idea.known_risks,
+        "monetization_approach": request.idea.monetization_approach,
     }
+    if request.custom_seed_ids:
+        idea_metadata["custom_seed_ids"] = request.custom_seed_ids
+    if request.custom_population_ids:
+        idea_metadata["custom_population_ids"] = request.custom_population_ids
 
     record = SimulationRecord(
         idea_title=request.idea.title,
@@ -106,6 +111,7 @@ async def create_simulation(
         differentiator=request.idea.differentiator,
         known_strengths=request.idea.known_strengths,
         known_risks=request.idea.known_risks,
+        monetization_approach=request.idea.monetization_approach,
     )
     config = SimConfig(
         num_ticks=request.config.num_ticks,
@@ -143,11 +149,21 @@ async def create_simulation(
     event_store.register(sim_id)
 
     # Launch simulation in a background thread with a timeout watchdog
+    # Custom variant: override config to match custom selections
+    if request.custom_population_ids:
+        config = SimConfig(
+            num_ticks=config.num_ticks,
+            population_size=len(request.custom_population_ids),
+            seed_count=len(request.custom_seed_ids) if request.custom_seed_ids else config.seed_count,
+        )
+
     _launch_with_timeout(
         sim_id, idea, config, asset_file_paths, asset_metadata,
         parent_simulation_id=request.parent_simulation_id,
         use_parent_seeds=bool(request.parent_simulation_id and request.use_parent_seeds),
         simulation_version=request.simulation_version,
+        custom_seed_ids=request.custom_seed_ids,
+        custom_population_ids=request.custom_population_ids,
     )
 
     return SimulationDetail(
@@ -189,6 +205,7 @@ def _compute_changed_fields(
     meta_fields = [
         "stage", "target_audience", "problem_statement", "price_point",
         "existing_alternatives", "differentiator", "known_strengths", "known_risks",
+        "monetization_approach",
     ]
     for field in meta_fields:
         new_val = str(getattr(request.idea, field, "")).strip()
@@ -203,6 +220,12 @@ def _compute_changed_fields(
         old_val = parent_config.get(field)
         if new_val != old_val:
             changed.append(field)
+
+    # Custom variant selections
+    if request.custom_population_ids:
+        changed.append("custom_population")
+    if request.custom_seed_ids:
+        changed.append("custom_seeds")
 
     return changed
 
@@ -268,6 +291,8 @@ def _launch_with_timeout(
     parent_simulation_id: str | None = None,
     use_parent_seeds: bool = False,
     simulation_version: str = "v1",
+    custom_seed_ids: list[str] | None = None,
+    custom_population_ids: list[str] | None = None,
 ):
     """Launch the simulation thread and a watchdog that enforces a timeout.
 
@@ -302,7 +327,8 @@ def _launch_with_timeout(
     worker = threading.Thread(
         target=_run_simulation_thread,
         args=(sim_id, idea, config, asset_file_paths, asset_metadata,
-              parent_simulation_id, use_parent_seeds, simulation_version),
+              parent_simulation_id, use_parent_seeds, simulation_version,
+              custom_seed_ids, custom_population_ids),
         daemon=True,
     )
     worker.start()
@@ -320,6 +346,8 @@ def _run_simulation_thread(
     parent_simulation_id: str | None = None,
     use_parent_seeds: bool = False,
     simulation_version: str = "v1",
+    custom_seed_ids: list[str] | None = None,
+    custom_population_ids: list[str] | None = None,
 ):
     """Run the simulation in a background thread.
 
@@ -367,8 +395,55 @@ def _run_simulation_thread(
         seed_override = None
         if parent_simulation_id:
             population_override = _load_parent_population(db_session, parent_simulation_id)
-            if use_parent_seeds:
+
+            if custom_population_ids and population_override:
+                # Custom variant: filter population to only selected NPCs
+                pop_by_id = {npc["id"]: npc for npc in population_override}
+                population_override = [
+                    pop_by_id[nid] for nid in custom_population_ids if nid in pop_by_id
+                ]
+                logger.info(
+                    "Custom variant: filtered population to %d/%d NPCs",
+                    len(population_override), len(pop_by_id),
+                )
+
+            if custom_seed_ids:
+                # Custom variant: use hand-picked seed IDs
+                seed_override = custom_seed_ids
+                logger.info("Custom variant: using %d hand-picked seeds", len(custom_seed_ids))
+            elif use_parent_seeds:
                 seed_override = _load_parent_seed_ids(db_session, parent_simulation_id)
+
+        # --- Competitor enrichment (both V1 & V2) ---
+        competitor_profiles: list[dict] = []
+        alternatives_raw = idea.existing_alternatives or ""
+        if alternatives_raw.strip():
+            emit({
+                "type": "v2_progress",
+                "tick": 0,
+                "data": {
+                    "phase": "competitor_research",
+                    "message": "Researching competitors...",
+                },
+            })
+            from backend.llm.client import llm_client
+            competitor_profiles = llm_client.enrich_competitors(
+                idea.to_dict(), alternatives_raw,
+            )
+            logger.info(
+                "Enriched %d competitors for sim %s",
+                len(competitor_profiles), sim_id,
+            )
+            # Persist competitor profiles on the record
+            try:
+                record = db_session.get(SimulationRecord, sim_id)
+                if record:
+                    meta = dict(record.idea_metadata or {})
+                    meta["competitor_profiles"] = competitor_profiles
+                    record.idea_metadata = meta
+                    db_session.commit()
+            except Exception:
+                logger.warning("Failed to persist competitor profiles", exc_info=True)
 
         # --- Dispatch: V1 or V2 engine ---
         if simulation_version == "v2":
@@ -376,11 +451,13 @@ def _run_simulation_thread(
             report = run_simulation_v2(
                 idea, config, emit=emit, asset_signals=asset_signals,
                 population_override=population_override, seed_override=seed_override,
+                competitor_profiles=competitor_profiles,
             )
         else:
             report = run_simulation(
                 idea, config, emit=emit, asset_signals=asset_signals,
                 population_override=population_override, seed_override=seed_override,
+                competitor_profiles=competitor_profiles,
             )
 
         # Final commit for any unflushed events
@@ -574,6 +651,78 @@ async def get_report(simulation_id: str, db: AsyncSession = Depends(get_db)):
     return record.report
 
 
+@router.get("/{simulation_id}/business-plan")
+async def get_business_plan(simulation_id: str, db: AsyncSession = Depends(get_db)):
+    """Return cached business plan, or 404 if not yet generated."""
+    result = await db.execute(
+        select(SimulationRecord).where(SimulationRecord.id == simulation_id)
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    if not record.business_plan:
+        raise HTTPException(status_code=404, detail="No business plan generated yet")
+    return record.business_plan
+
+
+@router.post("/{simulation_id}/business-plan")
+async def generate_business_plan(simulation_id: str, db: AsyncSession = Depends(get_db)):
+    """Generate and persist a structured business plan. Returns cached if already exists."""
+    result = await db.execute(
+        select(SimulationRecord).where(SimulationRecord.id == simulation_id)
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    if record.status != "completed":
+        raise HTTPException(status_code=400, detail=f"Simulation status: {record.status}")
+    if not record.report:
+        raise HTTPException(status_code=400, detail="No report available")
+
+    # Return cached plan if already generated
+    if record.business_plan:
+        return record.business_plan
+
+    # Build idea dict from stored metadata
+    meta = record.idea_metadata or {}
+    idea = {
+        "title": record.idea_title,
+        "description": record.idea_description,
+        "category": record.idea_category,
+        "stage": meta.get("stage", "concept"),
+        "target_audience": meta.get("target_audience", "general public"),
+        "price_point": meta.get("price_point", "not specified"),
+        "monetization_approach": meta.get("monetization_approach", "not specified"),
+        "differentiator": meta.get("differentiator", ""),
+        "known_strengths": meta.get("known_strengths", ""),
+        "known_risks": meta.get("known_risks", ""),
+        "existing_alternatives": meta.get("existing_alternatives", ""),
+    }
+
+    import asyncio
+    from backend.llm.client import llm_client
+
+    try:
+        plan = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: llm_client.generate_business_plan(
+                idea=idea,
+                report=record.report,
+                config=record.config or {},
+                engine_version=record.simulation_version or "v1",
+            ),
+        )
+    except Exception as e:
+        logger.exception("Business plan generation failed")
+        raise HTTPException(status_code=500, detail=f"Plan generation failed: {str(e)}")
+
+    # Persist to database
+    record.business_plan = plan
+    await db.commit()
+
+    return plan
+
+
 @router.get("/{simulation_id}/events")
 async def get_events(
     simulation_id: str,
@@ -630,6 +779,8 @@ _FIELD_LABELS = {
     "known_strengths": "Strengths", "known_risks": "Risks",
     "num_ticks": "Rounds", "population_size": "Population",
     "seed_count": "Initial Exposure",
+    "monetization_approach": "Monetization",
+    "custom_population": "Custom Population", "custom_seeds": "Custom Seeds",
 }
 
 
@@ -655,6 +806,16 @@ def _build_changed_fields_detail(
         elif field in ("num_ticks", "population_size", "seed_count"):
             old_val = str(parent_config.get(field, ""))
             new_val = str(variant_config.get(field, ""))
+        elif field == "custom_population":
+            parent_pop = parent_config.get("population_size", "?")
+            variant_pop = variant_config.get("population_size", "?")
+            old_val = f"{parent_pop} NPCs (auto-selected)"
+            new_val = f"{variant_pop} NPCs (hand-picked)"
+        elif field == "custom_seeds":
+            parent_seeds = parent_config.get("seed_count", "?")
+            variant_seeds = variant_config.get("seed_count", "?")
+            old_val = f"{parent_seeds} seeds (auto-selected)"
+            new_val = f"{variant_seeds} seeds (hand-picked)"
         else:
             old_val = str(parent_meta.get(field, ""))
             new_val = str(variant_meta.get(field, ""))

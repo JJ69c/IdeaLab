@@ -187,11 +187,9 @@ export default function Landing() {
   const [exiting, setExiting] = useState(false)
 
   const enterLab = useCallback(() => {
-    bodyRef.current?.classList.add('view-active')
-    setTimeout(() => {
-      if (landingRef.current) landingRef.current.style.display = 'none'
-    }, 1000)
-  }, [])
+    setExiting(true)
+    setTimeout(() => navigate('/dashboard'), 700)
+  }, [navigate])
 
   // Smooth exit: fade-out + slide-up, then navigate
   const navigateOut = useCallback((path: string) => {

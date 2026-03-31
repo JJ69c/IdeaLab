@@ -653,6 +653,13 @@ For each persona, generate a realistic reaction INCLUDING a direct interest scor
 - Always reference the persona's current_solution and price_anchor when scoring. A satisfied user of a competitor scores lower. A person whose price anchor is well below the asking price scores lower.
 - Satisfied people with locked-in switching barriers should almost never score above 0.40.
 
+## Archetype-Specific Modifiers
+- locked_in NPCs with high satisfaction: rarely above 0.35
+- actively_looking NPCs with clear pain points: can reach 0.65-0.70 for concept-stage
+- power_user familiarity + dissatisfied: highest potential scores (up to 0.75)
+- unaware familiarity: extra skepticism penalty, rarely above 0.45
+- Note: A math guardrail will clamp your score to within ±0.30 of the archetype baseline. Score honestly — the system handles outlier protection.
+
 Rules:
 - Stay in character. A skeptic should be skeptical. An early adopter should be excited.
 - Reference the persona's category context: their current solution, satisfaction, and pain points.
@@ -742,3 +749,153 @@ def format_v2_persona_for_prompt(npc: dict) -> str:
             lines.append(f"Category pain points: {'; '.join(pain_points)}")
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Competitor Enrichment Prompts
+# ---------------------------------------------------------------------------
+
+COMPETITOR_ENRICHMENT_SYSTEM = """You are a market research analyst. Your job is to evaluate whether
+named products/services are real, and provide structured competitive intelligence.
+
+Rules:
+- Only mark a product as "exists": true if you are confident it is a real, currently available
+  product or service. If unsure, set "exists": false and "uncertain": true.
+- For real products, provide factual information: actual pricing, real features, genuine strengths
+  and weaknesses based on market perception.
+- For products that don't exist or you're unsure about, still provide the name and set exists=false.
+- Do NOT invent pricing or features. If you don't know a detail, use null.
+- Keep descriptions concise — this data feeds into a simulation, not a report.
+
+Return a JSON array of competitor profiles."""
+
+COMPETITOR_ENRICHMENT_USER = """Analyze these competitors/alternatives for the product category described below.
+
+PRODUCT BEING EVALUATED:
+- Title: {idea_title}
+- Category: {idea_category}
+- Description: {idea_description}
+- Price point: {price_point}
+
+COMPETITORS TO ANALYZE (comma-separated):
+{alternatives}
+
+For each competitor, return a JSON array where each element has:
+{{
+  "name": "exact name as provided",
+  "exists": true/false,
+  "uncertain": true/false,
+  "category_match": "direct_competitor" | "indirect_competitor" | "different_category",
+  "pricing": "actual pricing string or null if unknown",
+  "positioning": "one-line market positioning",
+  "strengths": ["strength1", "strength2", "strength3"],
+  "weaknesses": ["weakness1", "weakness2"],
+  "user_sentiment": "general market perception in one sentence",
+  "relative_price": "cheaper" | "similar" | "more_expensive" | "unknown",
+  "market_presence": "dominant" | "established" | "growing" | "niche" | "unknown"
+}}
+
+Return ONLY the JSON array. No markdown fences, no commentary."""
+
+
+# ---------------------------------------------------------------------------
+# Business Plan Generation
+# ---------------------------------------------------------------------------
+
+BUSINESS_PLAN_SYSTEM = """You are a senior strategy consultant (McKinsey/BCG caliber) generating a structured business plan from simulation data.
+
+Your output must be a JSON object with these exact sections. Each section value is a string containing well-formatted content (use \\n for line breaks within sections). Be specific, data-driven, and reference the simulation results directly. Avoid generic advice — every recommendation should be grounded in the actual numbers and NPC feedback provided.
+
+Use the simulation data as your primary evidence base. When citing adoption rates, objection frequencies, segment sizes, or NPC quotes, reference the actual numbers. This is not a hypothetical plan — it is grounded in simulated consumer validation data.
+
+Return a JSON object with this structure:
+{{
+  "executive_summary": "2-3 paragraph overview: what the product is, the key finding from simulation, and the strategic recommendation",
+  "market_opportunity": {{
+    "overview": "Market context and why this opportunity exists",
+    "tam_sam_som": "TAM/SAM/SOM estimates based on target audience and category",
+    "timing": "Why now — what market conditions make this viable"
+  }},
+  "customer_validation": {{
+    "headline_metric": "The single most important number from the simulation",
+    "adoption_analysis": "What the adoption rate means, who adopted and who didn't, and why",
+    "segment_breakdown": "Which customer segments showed strongest/weakest response",
+    "willingness_to_pay": "Payment intent analysis from NPC data",
+    "key_objections": "Top objections ranked by frequency and severity, with mitigation strategies"
+  }},
+  "competitive_positioning": {{
+    "landscape": "Current competitive landscape and where this product fits",
+    "differentiation": "Core differentiator validated by simulation (what NPCs actually responded to)",
+    "moat_assessment": "Defensibility analysis — what's hard to copy"
+  }},
+  "business_model": {{
+    "revenue_model": "How the product makes money, grounded in the monetization approach and simulation data",
+    "unit_economics": "Per-user economics framework: estimated CAC, LTV, payback period based on conversion signals",
+    "pricing_recommendation": "Pricing strategy recommendation based on willingness-to-pay data and competitive positioning"
+  }},
+  "go_to_market": {{
+    "launch_strategy": "Phase 1 launch plan: target segment, channel, and positioning",
+    "growth_levers": "Top 3 growth opportunities identified from simulation data (e.g., which archetype spreads fastest, viral potential)",
+    "early_adopter_profile": "Who adopted first in the simulation and how to find them in the real world"
+  }},
+  "risk_assessment": {{
+    "critical_risks": "Top 3 risks identified from simulation (adoption barriers, objection patterns)",
+    "mitigation_strategies": "Specific actions to address each risk",
+    "kill_criteria": "What signals would indicate this idea should be abandoned or pivoted"
+  }},
+  "financial_projections": {{
+    "assumptions": "Key assumptions driving the projections, grounded in simulation conversion rates",
+    "year_1_outlook": "Conservative Year 1 projection: users, revenue, key milestones",
+    "year_3_outlook": "Year 3 scaling scenario based on adoption patterns"
+  }},
+  "strategic_recommendations": {{
+    "immediate_actions": "Top 3 things to do in the next 30 days",
+    "build_priorities": "What to build first based on which features drove adoption in the simulation",
+    "what_to_avoid": "Anti-patterns and pitfalls surfaced by the simulation"
+  }}
+}}
+
+IMPORTANT: Keep each section value concise — 3-5 sentences max per sub-section. Prioritize specificity over length. The total JSON must fit within 5000 tokens.
+
+Return ONLY valid JSON. No markdown fences."""
+
+
+BUSINESS_PLAN_USER = """Generate a structured business plan for the following product based on simulation results.
+
+## Product
+- **Name:** {idea_title}
+- **Description:** {idea_description}
+- **Category:** {idea_category}
+- **Stage:** {stage}
+- **Target Audience:** {target_audience}
+- **Pricing:** {price_point}
+- **Monetization:** {monetization_approach}
+- **Differentiator:** {differentiator}
+- **Known Strengths:** {known_strengths}
+- **Known Risks:** {known_risks}
+- **Existing Alternatives:** {existing_alternatives}
+
+## Simulation Configuration
+- Population: {population_size} NPCs across diverse archetypes
+- Rounds: {num_ticks} simulation ticks
+- Engine: {engine_version}
+
+## Simulation Results
+### Key Metrics
+{metrics_block}
+
+### Adoption Breakdown
+{adoption_block}
+
+### NPC Reactions (Individual)
+{npc_results_block}
+
+### Top Objections
+{objections_block}
+
+### Segment Analysis
+{segments_block}
+
+{extra_sections}
+
+Based on this simulation data, generate a comprehensive, data-driven business plan. Every claim should reference specific simulation metrics or NPC feedback. Be specific about numbers — don't round away precision that matters."""

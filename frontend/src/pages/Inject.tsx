@@ -126,6 +126,7 @@ const TEMPLATES: SimTemplate[] = [
       differentiator: 'Embedded directly in the workspace where your data already lives — no context switching, no copy-paste. AI has full access to your pages and databases for contextual answers.',
       known_strengths: 'Massive existing user base, seamless UX integration, workspace context gives better answers than generic chatbots',
       known_risks: 'Privacy concerns about AI reading workspace data, $10/user/mo add-on feels expensive on top of existing subscription, output quality sometimes generic',
+      monetization_approach: 'Per-seat add-on subscription ($10/user/mo) on top of existing Notion plan',
       num_ticks: 8,
       population_size: 30,
       seed_count: 8,
@@ -147,6 +148,7 @@ const TEMPLATES: SimTemplate[] = [
       differentiator: 'Ring form factor — invisible, comfortable for sleep, no screen distraction. Medical-grade sensors in a fashion-forward design that looks like jewelry, not tech.',
       known_strengths: 'Best-in-class sleep tracking accuracy, 7-day battery life, lightweight and comfortable for 24/7 wear, strong brand among biohackers and athletes',
       known_risks: '$349 hardware cost plus $6/mo subscription feels like double-dipping, no display means full dependency on phone app, limited fitness tracking compared to watches',
+      monetization_approach: 'Hardware sale ($349) plus recurring subscription ($6/mo) for app features and insights',
       num_ticks: 8,
       population_size: 30,
       seed_count: 8,
@@ -168,6 +170,7 @@ const TEMPLATES: SimTemplate[] = [
       differentiator: 'AI roleplay scenarios integrated into the gamified Duolingo experience — practice conversations without the anxiety of real humans, with instant corrections and encouragement from familiar characters.',
       known_strengths: 'Massive user base of 100M+ monthly actives, beloved gamification and streak mechanics, low barrier to upgrade from free tier',
       known_risks: 'At $30/mo it is 2x the cost of Super Duolingo, AI conversations feel scripted compared to real tutors, only available for Spanish and French initially, free users may not see enough value to jump two pricing tiers',
+      monetization_approach: 'Premium subscription tier ($30/mo) on top of free and Super tiers, upsell from existing 100M+ user base',
       num_ticks: 8,
       population_size: 30,
       seed_count: 8,
@@ -381,6 +384,7 @@ export default function Inject() {
     differentiator: '',
     known_strengths: '',
     known_risks: '',
+    monetization_approach: '',
     num_ticks: 8,
     population_size: 30,
     seed_count: 8,
@@ -418,6 +422,7 @@ export default function Inject() {
           differentiator: meta.differentiator || '',
           known_strengths: meta.known_strengths || '',
           known_risks: meta.known_risks || '',
+          monetization_approach: meta.monetization_approach || '',
           num_ticks: config.num_ticks ?? 8,
           population_size: config.population_size ?? 30,
           seed_count: config.seed_count ?? 8,
@@ -524,6 +529,7 @@ export default function Inject() {
           differentiator: form.differentiator,
           known_strengths: form.known_strengths,
           known_risks: form.known_risks,
+          monetization_approach: form.monetization_approach || 'not specified',
         },
         config: {
           num_ticks: form.num_ticks,
@@ -778,6 +784,25 @@ export default function Inject() {
           </div>
 
           <div>
+            <div className="flex items-center gap-1.5">
+              <FieldLabel label="Monetization Approach" hint="optional" />
+              <div className="relative group mb-1">
+                <span className="material-symbols-outlined text-[16px] text-amber-500 cursor-help">info</span>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-10 w-56 px-3 py-2 rounded-xl bg-surface-container border border-outline-variant/30 shadow-lg text-[11px] text-on-surface-variant leading-relaxed">
+                  Only V2 (LLM-Primary) considers this field. V1 ignores it since its engine is purely math-driven.
+                </div>
+              </div>
+            </div>
+            <input
+              type="text"
+              className={inputClass}
+              placeholder="e.g. 30% commission on creator sales, freemium with pro tier, ad-supported"
+              value={form.monetization_approach}
+              onChange={e => update('monetization_approach', e.target.value)}
+            />
+          </div>
+
+          <div>
             <FieldLabel label="Problem it Solves" hint="optional" />
             <textarea
               rows={2}
@@ -1001,7 +1026,7 @@ export default function Inject() {
             </div>
           </div>
 
-          <div>
+          <div className={variantOf && useParentSeeds ? 'opacity-50 pointer-events-none' : ''}>
             <div className="flex justify-between items-baseline mb-2">
               <FieldLabel label="Initial Exposure" />
               <span className="text-xs font-semibold text-primary">
@@ -1014,11 +1039,17 @@ export default function Inject() {
               className="w-full accent-primary h-2 rounded-full"
               value={form.seed_count}
               onChange={e => update('seed_count', parseInt(e.target.value))}
+              disabled={!!variantOf && useParentSeeds}
             />
             <div className="flex justify-between text-[10px] text-outline mt-1">
               <span>1 (organic)</span>
               <span>{Math.min(15, form.population_size)} (broad launch)</span>
             </div>
+            {variantOf && useParentSeeds && (
+              <p className="text-[10px] text-outline mt-1">
+                Locked — using same seeds as original
+              </p>
+            )}
           </div>
 
           {/* Engine Version Toggle */}

@@ -8,7 +8,11 @@ outcome gated by interest and filtered through barriers.
 Formula:
     adoption_score = interest_score × (1.0 - effective_barrier)
 
-    effective_barrier = weighted sum of personality-adjusted barriers:
+    effective_barrier = 1 - product of (1 - gap × weight) for each barrier.
+    Multiplicative composition: multiple moderate barriers compound into a
+    strong block (unlike additive, where they merely sum).
+
+    Individual barriers:
         trust_gap:     trust_barrier × (0.5 + 0.5 × skepticism)
         clarity_gap:   (1.0 - utility_clarity)
         price_gap:     price_friction × price_sensitivity   (paid products only)
@@ -148,16 +152,29 @@ def compute_npc_adoption(
     switching_gap = switching_cost_pressure * (0.3 + 0.7 * conformity)
     inertia_gap = incumbent_trust_pressure * (0.3 + 0.7 * (1.0 - openness))
 
-    # --- Weighted barrier ---
-    effective_barrier = (
-        BARRIER_WEIGHTS["trust"] * trust_gap
-        + BARRIER_WEIGHTS["clarity"] * clarity_gap
-        + BARRIER_WEIGHTS["price"] * price_gap
-        + BARRIER_WEIGHTS["trial"] * trial_gap
-        + BARRIER_WEIGHTS["switching"] * switching_gap
-        + BARRIER_WEIGHTS["inertia"] * inertia_gap
-    )
-    effective_barrier = max(0.0, min(1.0, effective_barrier))
+    # --- Multiplicative barrier composition ---
+    # Each barrier independently reduces the chance of adoption.
+    # pass_through = product of (1 - weighted_gap) for all barriers.
+    # effective_barrier = 1 - pass_through.
+    #
+    # Why multiplicative: if trust_gap=0.8 AND clarity_gap=0.8, the combined
+    # block is much stronger than additive suggests — a product you don't trust
+    # AND don't understand is nearly impossible to adopt, not just "2x harder".
+    #
+    # Each weight is normalized so the max single-barrier contribution matches
+    # the old additive model when only one barrier is active.
+    pass_through = 1.0
+    weighted_barriers = [
+        (BARRIER_WEIGHTS["trust"], trust_gap),
+        (BARRIER_WEIGHTS["clarity"], clarity_gap),
+        (BARRIER_WEIGHTS["price"], price_gap),
+        (BARRIER_WEIGHTS["trial"], trial_gap),
+        (BARRIER_WEIGHTS["switching"], switching_gap),
+        (BARRIER_WEIGHTS["inertia"], inertia_gap),
+    ]
+    for weight, gap in weighted_barriers:
+        pass_through *= (1.0 - gap * weight)
+    effective_barrier = max(0.0, min(1.0, 1.0 - pass_through))
 
     # --- Adoption score ---
     adoption_score = interest_score * (1.0 - effective_barrier)

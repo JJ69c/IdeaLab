@@ -66,6 +66,9 @@ class SimulationRecord(Base):
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Business plan (generated on-demand, cached)
+    business_plan: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
 
 class Asset(Base):
     __tablename__ = "assets"

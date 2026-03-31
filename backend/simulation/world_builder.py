@@ -76,8 +76,8 @@ class NpcCategoryContext:
     current_solution: str = ""
     satisfaction_level: str = "neutral"  # very_satisfied | satisfied | neutral | dissatisfied | very_dissatisfied
     price_anchor: str = ""
-    category_familiarity: str = "moderate"  # expert | familiar | moderate | low | none
-    openness_to_switch: str = "moderate"  # very_open | open | moderate | resistant | very_resistant
+    category_familiarity: str = "casual_user"  # unaware | heard_of_it | casual_user | regular_user | power_user
+    openness_to_switch: str = "open_if_better"  # locked_in | reluctant | open_if_better | actively_looking
     personal_connection: str = ""
     pain_points: list[str] = field(default_factory=list)
 
@@ -105,8 +105,8 @@ class NpcCategoryContext:
             current_solution="Uses a generic existing solution",
             satisfaction_level="neutral",
             price_anchor="Average market price",
-            category_familiarity="moderate",
-            openness_to_switch="moderate",
+            category_familiarity="casual_user",
+            openness_to_switch="open_if_better",
             personal_connection="No specific connection to this category",
             pain_points=[],
         )

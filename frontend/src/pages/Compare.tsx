@@ -464,50 +464,72 @@ export default function Compare() {
               </span>
             )}
           </div>
+          {data.variant.changed_fields.includes('custom_seeds') && (
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-purple-700 bg-purple-50 px-3 py-1 rounded-lg mb-3 w-fit">
+              <span className="material-symbols-outlined text-[14px]">tune</span>
+              Hand-picked seeds — variant used custom NPC selection
+            </span>
+          )}
           <p className="text-xs text-outline mb-4">
             Seeds are the NPCs made aware on tick 1. Same population but different seeds is expected — the variant runs fresh with the same market.
           </p>
-          <SideBySideHeader />
-          <div className="grid grid-cols-2 gap-6">
-            {[
-              { label: 'Original', seeds: data.diff.parent_initial_seeds },
-              { label: 'Variant', seeds: data.diff.variant_initial_seeds },
-            ].map(({ label, seeds }) => {
-              const otherSeeds = label === 'Original'
-                ? data.diff.variant_initial_seeds
-                : data.diff.parent_initial_seeds
-              const otherIds = new Set(otherSeeds.map(s => s.npc_id))
+          {(() => {
+            const pSeeds = data.diff.parent_initial_seeds
+            const vSeeds = data.diff.variant_initial_seeds
+            const SeedCell = ({ seed, shared }: { seed: SeedNpc | undefined; shared?: boolean }) => {
+              if (!seed) return <div className="rounded-xl px-3 py-2 border border-dashed border-outline-variant/20" />
               return (
-                <div key={label} className="space-y-2">
-                  {seeds.length === 0 && (
-                    <p className="text-sm text-outline">No seed data</p>
+                <div className={`flex items-center justify-between rounded-xl px-3 py-2 border text-sm ${
+                  shared
+                    ? 'bg-blue-50 border-blue-200'
+                    : 'bg-surface-container-lowest border-outline-variant/20'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {shared && (
+                      <span className="material-symbols-outlined text-[14px] text-blue-500">sync</span>
+                    )}
+                    <span className="font-medium text-on-surface">{seed.name}</span>
+                  </div>
+                  {seed.archetype && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-outline bg-surface-container px-2 py-0.5 rounded">
+                      {seed.archetype.replace(/_/g, ' ')}
+                    </span>
                   )}
-                  {seeds.map(seed => {
-                    const shared = otherIds.has(seed.npc_id)
-                    return (
-                      <div key={seed.npc_id} className={`flex items-center justify-between rounded-xl px-3 py-2 border text-sm ${
-                        shared
-                          ? 'bg-blue-50 border-blue-200'
-                          : 'bg-surface-container-lowest border-outline-variant/20'
-                      }`}>
-                        <div className="flex items-center gap-2">
-                          {shared && (
-                            <span className="material-symbols-outlined text-[14px] text-blue-500">sync</span>
-                          )}
-                          <span className="font-medium text-on-surface">{seed.name}</span>
-                        </div>
-                        {seed.archetype && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-outline bg-surface-container px-2 py-0.5 rounded">
-                            {seed.archetype.replace(/_/g, ' ')}
-                          </span>
-                        )}
-                      </div>
-                    )
-                  })}
                 </div>
               )
-            })}
-          </div>
+            }
+
+            // Build ordered lists: shared NPCs first (A-Z), then unique NPCs (A-Z)
+            // No gaps — rows are filled independently on each side. Blue highlight marks shared NPCs.
+            const vIdSet = new Set(vSeeds.map(s => s.npc_id))
+            const pIdSet = new Set(pSeeds.map(s => s.npc_id))
+            const sharedPIds = new Set(pSeeds.filter(s => vIdSet.has(s.npc_id)).map(s => s.npc_id))
+
+            const sortAZ = (a: SeedNpc, b: SeedNpc) => a.name.localeCompare(b.name)
+            const pSorted = [
+              ...pSeeds.filter(s => sharedPIds.has(s.npc_id)).sort(sortAZ),
+              ...pSeeds.filter(s => !sharedPIds.has(s.npc_id)).sort(sortAZ),
+            ]
+            const vSorted = [
+              ...vSeeds.filter(s => pIdSet.has(s.npc_id)).sort(sortAZ),
+              ...vSeeds.filter(s => !pIdSet.has(s.npc_id)).sort(sortAZ),
+            ]
+            const maxLen = Math.max(pSorted.length, vSorted.length)
+
+            return (
+              <>
+                <SideBySideHeader />
+                <div className="space-y-2">
+                  {Array.from({ length: maxLen }, (_, i) => (
+                    <div key={i} className="grid grid-cols-2 gap-6">
+                      <SeedCell seed={pSorted[i]} shared={pSorted[i] && sharedPIds.has(pSorted[i].npc_id)} />
+                      <SeedCell seed={vSorted[i]} shared={vSorted[i] && pIdSet.has(vSorted[i].npc_id)} />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )
+          })()}
         </section>
       )}
 

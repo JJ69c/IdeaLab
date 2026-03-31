@@ -55,9 +55,19 @@ PostgreSQL uses two drivers:
 
 Both derived from a single `DATABASE_URL` in config. SQLite fallback uses `aiosqlite` / `sqlite`.
 
+### Competitor Enrichment
+
+Before engine dispatch (both V1 and V2), if `existing_alternatives` is non-empty, the LLM verifies each alternative against real products and enriches with:
+- Pricing, positioning, strengths, weaknesses
+- Relative price, market presence, category match
+- Verification status (real product vs. hallucination)
+
+Enriched profiles are persisted on `idea_metadata.competitor_profiles` and included in the simulation report. Progress is streamed via SSE (`v2_progress` event with `competitor_research` phase).
+
 ### LLM Cost Strategy
 
 **V1:**
+- **Competitor enrichment**: 1 Sonnet call to verify/enrich listed alternatives (optional)
 - **Batch reactions**: Group 5-8 NPCs into single LLM calls
 - **Tiered models**: Haiku for NPC reactions, Sonnet for final report
 - **Deterministic math**: Influence, spread, adoption, convergence — no LLM
@@ -67,11 +77,22 @@ Both derived from a single `DATABASE_URL` in config. SQLite fallback uses `aiosq
 - **Retry with backoff**: 3 retries, 1-8s exponential delay for transient failures
 
 **V2 (additional costs):**
+- **Competitor enrichment**: Same as V1 (shared pre-processing step)
 - **World building**: 1 Sonnet call to construct WorldContext
 - **NPC enrichment**: Batched Sonnet calls to generate per-NPC NpcCategoryContext
 - **LLM-primary reactions**: Per-tick Haiku batches with world context + NPC context in prompt
 - **Guardrail clamping** (±0.30): LLM interest_score bounded to baseline ± GUARDRAIL_MAX_DEVIATION
 - **JSON truncation repair**: Detects max_tokens truncation and recovers partial JSON arrays
+
+**Business Plan (on-demand, both versions):**
+- **1 Sonnet call** (report model, 6000 max tokens) to generate a 9-section plan from stored simulation data
+- Uses `_call_json_v2` with truncation repair for robust JSON recovery
+- Only aware NPCs are sent in the prompt to save tokens (unaware NPCs filtered out)
+- `monetization_approach` from idea metadata flows into the business plan prompt
+- **Persisted to database** — stored as a `business_plan` JSON column on `SimulationRecord` (Alembic migration 0005). Once generated, subsequent requests return the cached plan instantly without an LLM call.
+- Not part of the simulation pipeline — generated only when the user requests it, avoiding unnecessary cost
+- Prompt templates: `BUSINESS_PLAN_SYSTEM` / `BUSINESS_PLAN_USER` in `prompts.py`
+- Data sources: simulation report (metrics, npc_results, analysis, adoption_breakdown, archetype_breakdown, convergence, competitor_profiles) plus idea metadata
 
 ## Database Schema
 
@@ -87,10 +108,10 @@ Managed via Alembic migrations (auto-run on startup).
 ### simulations
 - id (UUID, PK)
 - user_id (FK → users, nullable, indexed)
-- idea_title, idea_description, idea_category, idea_metadata (JSON)
+- idea_title, idea_description, idea_category, idea_metadata (JSON — includes `monetization_approach`, V2-only)
 - config (JSON — tick count, population size, seed count)
 - status (pending | running | completed | failed)
-- report (JSON), summary (text), metrics (JSON)
+- report (JSON), summary (text), metrics (JSON), business_plan (JSON, nullable — cached plan)
 - created_at, completed_at
 - parent_simulation_id, root_simulation_id (variant lineage)
 - variant_name, changed_fields (JSON)
@@ -124,6 +145,8 @@ Managed via Alembic migrations (auto-run on startup).
 | GET | /api/simulations/{id}/stream | SSE event stream (live or replay) |
 | GET | /api/simulations/{id}/report | Get structured report |
 | POST | /api/simulations/{id}/ask-npc | Chat with an NPC |
+| GET | /api/simulations/{id}/business-plan | Return cached business plan (404 if not yet generated) |
+| POST | /api/simulations/{id}/business-plan | Generate + persist a business plan; returns cached if already exists (on-demand, uses Sonnet) |
 | GET | /api/simulations/{id}/variants | List variants |
 | GET | /api/simulations/{id}/compare/{vid} | Compare parent vs variant (population match + seed lists) |
 | POST | /api/simulations/{id}/compare/{vid}/explain | AI explanation of differences |
@@ -146,23 +169,35 @@ Managed via Alembic migrations (auto-run on startup).
 
 ## Frontend Pages
 
-1. **Dashboard** — Simulations grouped by parent/variant hierarchy. Variants stacked under their parent with compact metric cards. Each simulation displays a version badge (V1 or V2).
-2. **Inject** — Structured form: idea details, market positioning, assets, strengths/risks. 3 quick-start templates (Notion AI, Oura Ring, Duolingo Max). Engine version selector (V1/V2, default V1). For variants: seed population toggle + version selector.
-3. **Live Simulation** — Real-time social graph, metrics, event feed via SSE. V2 simulations show a prep phase indicator (world building / NPC enrichment) before the tick loop. Error overlay for failed simulations with specific error details.
-4. **Report** — Full results with charts, segment analysis, NPC breakdown. Individual Reactions filterable by seed/all-aware and sortable with seeds-first or others-first. Seed NPCs visually marked.
-5. **Compare** — Side-by-side variant comparison with metrics deltas, population verification (confirms same 30 NPCs), initial seed lists for both runs, archetype impact, AI explanation.
+1. **Dashboard** — Simulations grouped by parent/variant hierarchy. Variants stacked under their parent with compact metric cards. Each simulation displays a version badge (V1 or V2). Time-based sorting (newest/oldest) with variant groups moving together.
+2. **Inject** — Structured form: idea details, market positioning, monetization approach, assets, strengths/risks. 3 quick-start templates (Notion AI, Oura Ring, Duolingo Max). Engine version selector (V1/V2, default V1). `monetization_approach` is V2-only (ignored by V1's deterministic engine); describes how the product makes money (e.g. "30% commission on creator sales", "freemium with pro tier"). Defaults to "not specified". Flows into `InjectedIdea.to_dict()` and is consumed by V2's world-builder and reaction prompts. Included in variant change tracking (`_compute_changed_fields` / `_FIELD_LABELS`). For variants: seed population toggle + version selector + initial exposure (locked when same seeds). Launch validation blocks if population < initial exposure. Variant-of-variant shows "variant" badge on parent.
+3. **Live Simulation** — Real-time social graph, metrics, event feed via SSE. V2 simulations show a prep phase with step indicators (competitor research → world building → NPC enrichment) and rotating flavor text before the tick loop. Error overlay for failed simulations with specific error details.
+4. **Report** — Full results with charts, segment analysis, NPC breakdown. Individual Reactions filterable by seed/all-aware and sortable with seeds-first or others-first. Seed NPCs visually marked. Custom Variant button alongside Quick Variant and Full Variant.
+5. **Business Plan** (`/business-plan/:id`) — On-demand consultant-grade business plan generated from simulation results. Pre-generation screen shows product context; user clicks to generate. Once generated, the plan is persisted to the database and loaded instantly on return visits (GET returns cached plan, POST generates only if not already cached). Dynamic loading animation displays 8 progress phases (reading data, analyzing signals, sizing market, mapping competition, modeling economics, crafting GTM, assessing risks, writing plan) with a progress bar, elapsed timer, and checklist. Displays 9 sections (Executive Summary, Market Opportunity with TAM/SAM/SOM, Customer Validation, Competitive Positioning, Business Model & Unit Economics, Go-to-Market Strategy, Risk Assessment, Financial Projections, Strategic Recommendations) with gradient cards and table of contents navigation. Accessible via "Business Plan" button on the Report page header.
+6. **Compare** — Side-by-side variant comparison: config diffs (rounds, population, initial exposure with change highlighting), metrics deltas, population verification with aligned NPC rows (shared NPCs highlighted, unique NPCs sorted A-Z), archetype impact, AI explanation. Variant marked in header. Supports comparison against root or direct parent. Custom variants display a purple "Hand-picked seeds" badge.
 
 ### Variant Options
 
-Both Quick Variant (drawer) and Full Variant (Inject page) support:
+Quick Variant (drawer), Full Variant (Inject page), and Custom Variant (drawer) are available. Quick and Full support:
 
 **Engine version:**
 - **V1 Deterministic** (default) — Fast, consistent, math-driven
 - **V2 LLM-Primary** — Slower, costlier, more nuanced reactions
 
 **Seed population:**
-- **Fresh seeds** (default) — Re-selects the initial 8 exposed NPCs via stratified sampling. Adds realistic market variance but conflates seed selection noise with the product change.
-- **Same seeds** — Locks the variant to use the exact same 8 NPCs that were exposed first in the parent. Isolates the product variable for a controlled A/B comparison.
+- **Fresh seeds** (default) — Re-selects the initial exposed NPCs via stratified sampling. Adds realistic market variance but conflates seed selection noise with the product change. Initial exposure slider adjustable.
+- **Same seeds** — Locks the variant to use the exact same NPCs that were exposed first in the parent. Initial exposure slider locked. Isolates the product variable for a controlled A/B comparison.
+
+**Launch validation:** Population must be ≥ initial exposure. If violated, launch is blocked with a user-facing error (no silent auto-adjustment).
+
+**Custom Variant:**
+- User hand-picks population members and initial seeds via a two-tier NPC picker (`CustomVariantDrawer.tsx`)
+- `CreateSimulationRequest` accepts `custom_seed_ids: list[str] | None` and `custom_population_ids: list[str] | None`
+- Backend auto-adjusts `population_size` and `seed_count` in config to match the custom selections
+- `changed_fields` includes `"custom_population"` and `"custom_seeds"` when used; `_build_changed_fields_detail` labels them "hand-picked" vs "auto-selected"
+- Validation: population ≥ 10, seeds ≥ 1 and ≤ 15
+- Compare page shows a purple "Hand-picked seeds" badge when variant used custom selection
+- Engine version (V1/V2) and rounds are configurable
 
 ## Deployment
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import QuickVariantDrawer from '../components/QuickVariantDrawer'
+import CustomVariantDrawer from '../components/CustomVariantDrawer'
 
 interface VariantSummary {
   id: string
@@ -38,7 +39,7 @@ interface SimDetail {
       risk_factors: string[]
     }
     npc_results: {
-      npc_id: string; name: string; occupation: string; age: number
+      npc_id: string; name: string; occupation: string; age: number; archetype?: string
       interest_score: number; stance: string; reasoning: string
       objections: string[]; would_pay: boolean; would_recommend: boolean
       adopted?: boolean; adoption_score?: number; adoption_blockers?: string[]
@@ -77,6 +78,7 @@ export default function Report() {
   const [variants, setVariants] = useState<VariantSummary[]>([])
   const [parentTitle, setParentTitle] = useState<string | null>(null)
   const [quickVariantOpen, setQuickVariantOpen] = useState(false)
+  const [customVariantOpen, setCustomVariantOpen] = useState(false)
   const [seedIds, setSeedIds] = useState<Set<string>>(new Set())
   const [npcFilter, setNpcFilter] = useState<'all' | 'seeds_only'>('all')
   const [npcSort, setNpcSort] = useState<'seeds_first' | 'others_first'>('seeds_first')
@@ -150,11 +152,25 @@ export default function Report() {
             <span className="material-symbols-outlined text-[16px]">science</span>
             Quick Variant
           </button>
+          <button
+            onClick={() => setCustomVariantOpen(true)}
+            className="flex items-center gap-1.5 text-sm border border-tertiary/30 text-tertiary px-4 py-2 rounded-lg hover:bg-tertiary/5 transition-all"
+          >
+            <span className="material-symbols-outlined text-[16px]">tune</span>
+            Custom Variant
+          </button>
           <Link
             to={`/inject?variant_of=${id}`}
             className="text-sm border border-indigo-600 text-indigo-600 px-4 py-2 rounded-lg hover:bg-indigo-50"
           >
             Full Variant
+          </Link>
+          <Link
+            to={`/business-plan/${id}`}
+            className="flex items-center gap-1.5 text-sm border border-green-600/30 text-green-700 px-4 py-2 rounded-lg hover:bg-green-50 transition-all"
+          >
+            <span className="material-symbols-outlined text-[16px]">description</span>
+            Business Plan
           </Link>
           <Link
             to={`/simulation/${id}`}
@@ -603,6 +619,27 @@ export default function Report() {
           config: sim.config || {},
           parent_simulation_id: sim.parent_simulation_id,
         }}
+      />
+
+      {/* Custom Variant Drawer */}
+      <CustomVariantDrawer
+        open={customVariantOpen}
+        onClose={() => setCustomVariantOpen(false)}
+        parentSimulation={{
+          id: sim.id,
+          idea_title: sim.idea_title,
+          idea_description: sim.idea_description,
+          idea_category: sim.idea_category || 'general',
+          idea_metadata: sim.idea_metadata || {},
+          config: sim.config || {},
+          parent_simulation_id: sim.parent_simulation_id,
+        }}
+        npcs={npc_results.map(n => ({
+          npc_id: n.npc_id,
+          name: n.name,
+          archetype: n.archetype,
+        }))}
+        seedIds={seedIds}
       />
     </div>
   )

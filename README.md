@@ -14,6 +14,8 @@ Two engine versions are available:
 You describe an idea → choose engine version (V1 or V2)
 
 V1 (Deterministic):
+  -> Competitor Enrichment: LLM verifies listed alternatives against real products,
+     enriches with pricing, positioning, strengths/weaknesses (persisted on record)
   -> Engine builds a product profile (8 normalized dimensions)
   -> Optional: LLM vision analyzes uploaded reference assets (7 perception signals)
   -> Optional: Engine classifies listed alternatives into competition context (5 dimensions)
@@ -30,6 +32,8 @@ V1 (Deterministic):
   -> Results streamed via SSE, persisted to PostgreSQL
 
 V2 (LLM-Primary):
+  -> Competitor Enrichment: LLM verifies listed alternatives against real products,
+     enriches with pricing, positioning, strengths/weaknesses (persisted on record)
   -> Layer 1: LLM builds shared WorldContext (market reality, key players, price ranges)
   -> Layer 2: LLM enriches each NPC with NpcCategoryContext (current solution, satisfaction, pain points)
   -> Tick loop runs with LLM-primary scoring:
@@ -95,7 +99,7 @@ Archetype thresholds range from 0.55 (Trend Adopter) to 0.70 (Health Evaluator, 
 - **Simulation timeout** — Watchdog thread marks simulations as failed after 15 minutes, notifies SSE clients
 - **Event store cleanup** — Completed simulation events auto-purged from memory after 2 minutes (or immediately when SSE client disconnects). Prevents OOM on long-running servers.
 - **Calibrated constants** — Key propagation parameters (concern share base, delta multiplier, exposure decay, saturation damper) documented with sensitivity analysis ranges and rationale
-- **Input validation** — Cross-field constraint: seed_count cannot exceed population_size
+- **Input validation** — Cross-field constraint: seed_count cannot exceed population_size (enforced at launch with user-facing error)
 - **Stance band stability** — Band widths (0.12–0.20) sized so a typical discussion delta rarely flips more than one stance
 
 ## Tech Stack
@@ -131,6 +135,11 @@ createdb idealab
 # Or use SQLite: set DATABASE_URL=sqlite+aiosqlite:///./idealab.db in .env
 
 # Backend
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+# source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 # Alembic migrations run automatically on startup
@@ -145,16 +154,20 @@ Open **http://localhost:5173**.
 
 ## Usage
 
-1. **Define your idea** — Fill in the structured form: idea details, market positioning, optional reference assets, strengths/risks
+1. **Define your idea** — Fill in the structured form: idea details, market positioning, monetization approach (V2-only — describes how the product makes money), optional reference assets, strengths/risks
 2. **Configure** — Set rounds (3-20), population (10-50), initial exposure (1-15), and engine version (V1 or V2)
 3. **Launch** — Watch the live simulation: interactive social graph, real-time metrics, event feed. V2 shows a prep phase (world building + NPC enrichment) before the tick loop starts.
 4. **Review report** — Adoption breakdown, segment analysis, objections, recommendations
-5. **Create variants** — Quick Variant (change 6 key params) or Full Variant. Both support:
+5. **Generate business plan** — Click "Business Plan" on the report page to generate a consultant-grade 9-section plan (Executive Summary, TAM/SAM/SOM, Customer Validation, Competitive Positioning, Unit Economics, GTM Strategy, Risk Assessment, Financial Projections, Strategic Recommendations). Generated on-demand to avoid unnecessary LLM costs. Once generated, the plan is persisted to the database and returned instantly on subsequent visits. A dynamic loading animation shows 8 progress phases with a progress bar, elapsed timer, and checklist.
+6. **Create variants** — Quick Variant (change 6 key params), Full Variant, or Custom Variant. Quick and Full support:
    - **Engine version** — V1 Deterministic or V2 LLM-Primary
    - **Fresh seeds** (default) — Re-selects who hears first (realistic variance)
-   - **Same seeds** — Locks initial exposure to parent's seeds (controlled A/B, isolates the product change)
-   - Compare side-by-side with metrics deltas, population verification, and AI explanation.
-6. **Chat with NPCs** — Click any NPC in the graph to ask questions. Responses are grounded in their simulation state.
+   - **Same seeds** — Locks initial exposure and seeds to parent's values (controlled A/B, isolates the product change)
+   - **Initial exposure** — Adjustable when using fresh seeds; locked when same seeds selected
+   - **Launch validation** — Population must be ≥ initial exposure (blocks launch instead of auto-adjusting)
+   - **Custom Variant** — Hand-pick which NPCs are in the population and which become initial seeds via a two-tier NPC picker. NPCs sorted by parent seeds first, then alphabetically, with archetype badges. Population must be ≥ 10, seeds between 1–15. Engine version and rounds are configurable. Config auto-adjusts to match your selections.
+   - Compare side-by-side: config diffs, metrics deltas, population verification (shared NPCs aligned), AI explanation. Custom variants show a "Hand-picked seeds" badge.
+7. **Chat with NPCs** — Click any NPC in the graph to ask questions. Responses are grounded in their simulation state.
 
 ## Project Structure
 
@@ -164,7 +177,7 @@ idealab/
 │   ├── api/                       # FastAPI routes, schemas, JWT auth
 │   ├── alembic/                   # Database migrations (auto-run on startup)
 │   ├── db/                        # SQLAlchemy models (User, Simulation, Asset, Event)
-│   ├── llm/                       # Claude API client with retry, prompts
+│   ├── llm/                       # Claude API client with retry, prompts, competitor enrichment
 │   ├── simulation/
 │   │   ├── engine.py              # V1 tick loop, seeding, discussion cap
 │   │   ├── engine_v2.py           # V2 tick loop (LLM-primary scoring, world context)
@@ -181,7 +194,7 @@ idealab/
 │   │   └── world.py               # World state, config
 │   └── config.py                  # Settings
 ├── frontend/src/
-│   ├── pages/                     # Dashboard, Inject, LiveSimulation, Report, Compare
+│   ├── pages/                     # Dashboard, Inject, LiveSimulation, Report, BusinessPlan, Compare
 │   └── components/                # Graph, metrics, NPC chat, event feed
 ├── docs/
 │   ├── product/                   # PRD
@@ -200,6 +213,7 @@ A 13-layer deterministic validation harness verifies the simulation without LLM 
 
 ```bash
 cd idealab
+.venv\Scripts\activate  # or: source .venv/bin/activate
 python -m tests.validation.validate_simulation            # all layers
 python -m tests.validation.validate_simulation --layer 13  # specific layer
 ```
@@ -252,6 +266,8 @@ Auth is currently optional — unauthenticated requests still work but simulatio
 | `GET` | `/api/simulations/{id}/stream` | SSE event stream (live or replay) |
 | `GET` | `/api/simulations/{id}/report` | Get structured report |
 | `POST` | `/api/simulations/{id}/ask-npc` | Chat with an NPC |
+| `GET` | `/api/simulations/{id}/business-plan` | Return cached business plan (404 if not yet generated) |
+| `POST` | `/api/simulations/{id}/business-plan` | Generate + persist a business plan (returns cached if exists) |
 | `GET` | `/api/simulations/{id}/variants` | List variants |
 | `GET` | `/api/simulations/{id}/compare/{vid}` | Compare parent vs variant (includes population + seed verification) |
 | `POST` | `/api/simulations/{id}/compare/{vid}/explain` | AI explanation of differences |

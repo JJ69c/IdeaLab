@@ -262,6 +262,9 @@ class LLMClient:
         discussions: list[dict],
         num_ticks: int,
         population_size: int,
+        archetype_breakdown: list[dict] | None = None,
+        convergence: dict | None = None,
+        competitor_profiles: list[dict] | None = None,
     ) -> dict:
         """Generate the final structured analysis report using the stronger model."""
         from backend.llm.prompts import REPORT_SYSTEM, REPORT_USER
@@ -269,6 +272,30 @@ class LLMClient:
         metrics_block = "\n".join(f"- {k}: {v}" for k, v in metrics.items())
         npc_results_block = json.dumps(npc_results, indent=2)
         discussions_block = json.dumps(discussions[:15], indent=2)  # cap for token budget
+
+        # Build optional context sections
+        extra_sections = ""
+        if archetype_breakdown:
+            extra_sections += "\n## Per-Archetype Breakdown\n"
+            for ab in archetype_breakdown:
+                extra_sections += (
+                    f"- {ab['archetype']} (n={ab['count']}): "
+                    f"mean_interest={ab['mean_interest']}, "
+                    f"adoption={ab['adoption_rate']:.0%} "
+                    f"({ab['adopted_count']}/{ab['aware_count']} aware)\n"
+                )
+        if convergence:
+            extra_sections += "\n## Convergence Analysis\n"
+            extra_sections += json.dumps(convergence, indent=2) + "\n"
+        if competitor_profiles:
+            extra_sections += "\n## Competitor Intelligence\n"
+            for cp in competitor_profiles:
+                if cp.get("exists"):
+                    extra_sections += (
+                        f"- {cp['name']}: {cp.get('positioning', 'N/A')} "
+                        f"(price: {cp.get('pricing', 'unknown')}, "
+                        f"presence: {cp.get('market_presence', 'unknown')})\n"
+                    )
 
         prompt = REPORT_USER.format(
             idea_title=idea.get("title", ""),
@@ -280,9 +307,127 @@ class LLMClient:
             npc_results_block=npc_results_block,
             discussions_block=discussions_block,
         )
+        # Append extra context after the formatted prompt
+        if extra_sections:
+            prompt += "\n" + extra_sections
 
         return self._call_json(
             REPORT_SYSTEM, prompt, model=settings.report_model, max_tokens=4096
+        )
+
+    def generate_business_plan(
+        self,
+        idea: dict,
+        report: dict,
+        config: dict,
+        engine_version: str = "v1",
+    ) -> dict:
+        """Generate a structured business plan from simulation results."""
+        from backend.llm.prompts import BUSINESS_PLAN_SYSTEM, BUSINESS_PLAN_USER
+
+        metrics = report.get("metrics", {})
+        analysis = report.get("analysis", {})
+        npc_results = report.get("npc_results", [])
+        adoption = report.get("adoption_breakdown", {})
+
+        metrics_block = "\n".join(f"- {k}: {v}" for k, v in metrics.items())
+
+        adoption_block = "No adoption data available."
+        if adoption:
+            blockers = adoption.get('top_blockers', [])
+            blocker_parts = [f"{b['blocker']} ({b['count']} NPCs)" for b in blockers]
+            adoption_block = (
+                f"- Adoption rate: {adoption.get('adoption_rate', 0):.0%}\n"
+                f"- Adopted: {adoption.get('adopted_count', 0)}/{adoption.get('aware_count', 0)} aware\n"
+                f"- Top blockers: {', '.join(blocker_parts)}"
+            )
+
+        # Compact NPC summaries — only aware NPCs (unaware ones add no signal)
+        npc_summaries = []
+        for n in npc_results:
+            if n.get("stance") == "unaware":
+                continue
+            summary = {
+                "name": n.get("name"),
+                "archetype": n.get("archetype", "unknown"),
+                "interest": n.get("interest_score"),
+                "stance": n.get("stance"),
+                "would_pay": n.get("would_pay"),
+                "adopted": n.get("adopted"),
+                "objections": n.get("objections", []),
+                "reasoning": n.get("reasoning", "")[:150],
+            }
+            npc_summaries.append(summary)
+
+        objections_block = "None recorded."
+        top_obj = analysis.get("top_objections", [])
+        if top_obj:
+            objections_block = "\n".join(
+                f"- [{o['severity']}] {o['objection']} ({o['frequency']} NPCs)"
+                for o in top_obj
+            )
+
+        segments_block = "None identified."
+        segments = analysis.get("segments", [])
+        if segments:
+            segments_block = "\n".join(
+                f"- {s['name']} ({s['size']} NPCs): {s['typical_reaction']} — driver: {s.get('key_driver', 'N/A')}"
+                for s in segments
+            )
+
+        # Extra context sections
+        extra_sections = ""
+        archetype_breakdown = report.get("archetype_breakdown", [])
+        if archetype_breakdown:
+            extra_sections += "### Archetype Breakdown\n"
+            for ab in archetype_breakdown:
+                extra_sections += (
+                    f"- {ab['archetype']} (n={ab['count']}): "
+                    f"mean_interest={ab['mean_interest']}, "
+                    f"adoption={ab.get('adoption_rate', 0):.0%}\n"
+                )
+
+        convergence = report.get("convergence", {})
+        if convergence and convergence.get("final_state"):
+            fs = convergence["final_state"]
+            extra_sections += f"\n### Convergence\n- Result: {fs.get('result_class', 'unknown')}, polarized={fs.get('polarized', False)}, converged={fs.get('converged', False)}\n"
+
+        competitor_profiles = report.get("competitor_profiles", [])
+        if competitor_profiles:
+            extra_sections += "\n### Competitor Intelligence\n"
+            for cp in competitor_profiles:
+                if cp.get("exists"):
+                    extra_sections += (
+                        f"- {cp['name']}: {cp.get('positioning', 'N/A')} "
+                        f"(price: {cp.get('pricing', 'unknown')}, "
+                        f"presence: {cp.get('market_presence', 'unknown')})\n"
+                    )
+
+        prompt = BUSINESS_PLAN_USER.format(
+            idea_title=idea.get("title", ""),
+            idea_description=idea.get("description", ""),
+            idea_category=idea.get("category", "general"),
+            stage=idea.get("stage", "concept"),
+            target_audience=idea.get("target_audience", "general public"),
+            price_point=idea.get("price_point", "not specified"),
+            monetization_approach=idea.get("monetization_approach", "not specified"),
+            differentiator=idea.get("differentiator", ""),
+            known_strengths=idea.get("known_strengths", ""),
+            known_risks=idea.get("known_risks", ""),
+            existing_alternatives=idea.get("existing_alternatives", ""),
+            population_size=config.get("population_size", 30),
+            num_ticks=config.get("num_ticks", 8),
+            engine_version=engine_version,
+            metrics_block=metrics_block,
+            adoption_block=adoption_block,
+            npc_results_block=json.dumps(npc_summaries, indent=2),
+            objections_block=objections_block,
+            segments_block=segments_block,
+            extra_sections=extra_sections,
+        )
+
+        return self._call_json_v2(
+            BUSINESS_PLAN_SYSTEM, prompt, model=settings.report_model, max_tokens=6000
         )
 
     # ── V2 Methods ───────────────────────────────────────────────────────
@@ -417,12 +562,14 @@ class LLMClient:
                 idea_stage=idea.get("stage", "concept"),
                 target_audience=idea.get("target_audience", "general public"),
                 price_point=idea.get("price_point", "not specified"),
+                existing_alternatives=idea.get("existing_alternatives", "none listed"),
             )
 
+            # Use default model (Haiku) — world context is factual/structural,
+            # doesn't need Sonnet-level reasoning. ~70% cost savings.
             result = self._call_json_v2(
                 V2_WORLD_BUILDER_SYSTEM,
                 prompt,
-                model=settings.report_model,
                 max_tokens=2048,
             )
 
@@ -525,6 +672,54 @@ class LLMClient:
             return result
         except Exception:
             logger.exception("v2_batch_react failed")
+            return []
+
+
+    # ------------------------------------------------------------------
+    # Competitor enrichment
+    # ------------------------------------------------------------------
+
+    def enrich_competitors(self, idea: dict, alternatives_raw: str) -> list[dict]:
+        """Enrich a comma-separated list of alternatives into structured competitor profiles.
+
+        Returns a list of dicts, one per competitor.  Falls back to an empty
+        list on failure so the simulation can still proceed.
+        """
+        from backend.llm.prompts import (
+            COMPETITOR_ENRICHMENT_SYSTEM,
+            COMPETITOR_ENRICHMENT_USER,
+        )
+
+        alternatives = alternatives_raw.strip()
+        if not alternatives:
+            return []
+
+        try:
+            prompt = COMPETITOR_ENRICHMENT_USER.format(
+                idea_title=idea.get("title", ""),
+                idea_category=idea.get("category", "general"),
+                idea_description=idea.get("description", ""),
+                price_point=idea.get("price_point", "not specified"),
+                alternatives=alternatives,
+            )
+
+            # Use default model (Haiku) — competitor verification is factual,
+            # doesn't need Sonnet-level reasoning. ~70% cost savings.
+            result = self._call_json(
+                COMPETITOR_ENRICHMENT_SYSTEM,
+                prompt,
+                max_tokens=2048,
+            )
+
+            if isinstance(result, list):
+                return result
+            logger.warning(
+                "enrich_competitors expected list, got %s; returning empty",
+                type(result),
+            )
+            return []
+        except Exception:
+            logger.exception("enrich_competitors failed, returning empty list")
             return []
 
 

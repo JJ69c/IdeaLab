@@ -28,6 +28,7 @@ class InjectedIdea:
     differentiator: str = ""
     known_strengths: str = ""
     known_risks: str = ""
+    monetization_approach: str = "not specified"
 
     def to_dict(self) -> dict:
         d = {
@@ -49,6 +50,8 @@ class InjectedIdea:
             d["known_strengths"] = self.known_strengths
         if self.known_risks:
             d["known_risks"] = self.known_risks
+        if self.monetization_approach and self.monetization_approach != "not specified":
+            d["monetization_approach"] = self.monetization_approach
         return d
 
 

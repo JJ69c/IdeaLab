@@ -47,6 +47,12 @@ DISCUSSION_UPLIFT_CAP = 0.40
 # Slightly more permissive than uplift cap — skepticism flows more freely than hype.
 DISCUSSION_DOWNDRAFT_CAP = 0.50
 
+# Discussion decay: later-tick discussions have diminishing persuasive impact.
+# At tick 1 the multiplier is 1.0; at tick 8 it's ~0.58.
+# Formula: 1.0 / (1.0 + DISCUSSION_DECAY_RATE * (tick - 1))
+# Rationale: repeated arguments lose novelty and force over time.
+DISCUSSION_DECAY_RATE = 0.10
+
 
 def create_world(
     idea: InjectedIdea,
@@ -55,6 +61,7 @@ def create_world(
     asset_signals: AssetSignals | None = None,
     population_override: list[dict] | None = None,
     seed_override: list[str] | None = None,
+    competitor_profiles: list[dict] | None = None,
 ) -> WorldState:
     """Initialize a world with a population, injected idea, and product profile.
 
@@ -104,6 +111,7 @@ def create_world(
             idea.existing_alternatives, idea_category=idea.category,
         )
     world.competition_context = competition_context
+    world.competitor_profiles = competitor_profiles or []
 
     # Build the normalized product profile from structured idea fields
     world.product_profile = build_product_profile(
@@ -126,6 +134,7 @@ def run_simulation(
     asset_signals: AssetSignals | None = None,
     population_override: list[dict] | None = None,
     seed_override: list[str] | None = None,
+    competitor_profiles: list[dict] | None = None,
 ) -> dict:
     """Run a full simulation, emitting events for live streaming.
 
@@ -145,6 +154,7 @@ def run_simulation(
         asset_signals=asset_signals,
         population_override=population_override,
         seed_override=seed_override,
+        competitor_profiles=competitor_profiles,
     )
     tracker = ConvergenceTracker()
 
@@ -162,6 +172,7 @@ def run_simulation(
             "product_profile": world.product_profile.to_dict(),
             "asset_signals": world.asset_signals.to_dict() if world.asset_signals else None,
             "competition_context": world.competition_context.to_dict() if world.competition_context else None,
+            "competitor_profiles": world.competitor_profiles or [],
             "npc_archetypes": world.npc_archetypes,
         },
     })
@@ -671,8 +682,10 @@ def _run_discussion(
         npc_a.personality.social_influence, trust, npc_b.personality.skepticism,
         source_archetype=getattr(npc_a, "archetype", None),
     )
-    a_delta = round(raw_a_delta * a_weight, 4)
-    b_delta = round(raw_b_delta * b_weight, 4)
+    # Apply discussion decay: later ticks have diminishing persuasive impact
+    decay = 1.0 / (1.0 + DISCUSSION_DECAY_RATE * (tick - 1))
+    a_delta = round(raw_a_delta * a_weight * decay, 4)
+    b_delta = round(raw_b_delta * b_weight * decay, 4)
 
     # Cap discussion deltas so they cannot push interest beyond baseline ± cap.
     # Uplift cap: prevents hype cascades from overriding weak product fundamentals.

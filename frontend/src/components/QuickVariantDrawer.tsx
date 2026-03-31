@@ -70,6 +70,7 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
           differentiator: form.differentiator || '',
           known_strengths: meta.known_strengths || '',
           known_risks: meta.known_risks || '',
+          monetization_approach: meta.monetization_approach || 'not specified',
         },
         config: {
           num_ticks: form.num_ticks,
@@ -91,7 +92,8 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
 
       if (!res.ok) {
         const body = await res.json().catch(() => null)
-        const detail = body?.detail || `Server error: ${res.status}`
+        const raw = body?.detail
+        const detail = typeof raw === 'string' ? raw : (raw?.msg || JSON.stringify(raw) || `Server error: ${res.status}`)
         throw new Error(detail)
       }
 
@@ -359,10 +361,10 @@ export default function QuickVariantDrawer({ open, onClose, parentSimulation }: 
             </div>
             <input
               type="range"
-              min={1} max={form.population_size} step={1}
+              min={1} max={Math.min(15, form.population_size)} step={1}
               className="w-full accent-primary h-2 rounded-full"
               value={form.seed_count}
-              onChange={e => update('seed_count', Math.min(parseInt(e.target.value), form.population_size))}
+              onChange={e => update('seed_count', Math.min(parseInt(e.target.value), 15, form.population_size))}
               disabled={useParentSeeds}
             />
             {useParentSeeds && (

@@ -19,6 +19,10 @@ class IdeaInput(BaseModel):
     differentiator: str = Field(default="", description="Key differentiator from alternatives")
     known_strengths: str = Field(default="", description="Strengths the founder already knows about")
     known_risks: str = Field(default="", description="Risks or concerns the founder is aware of")
+    monetization_approach: str = Field(
+        default="not specified",
+        description="How the product makes money (e.g. '30% commission on creator sales', 'freemium with pro tier', 'ad-supported')",
+    )
 
 
 class SimulationConfigInput(BaseModel):
@@ -77,4 +81,19 @@ class CreateSimulationRequest(BaseModel):
         default="v1",
         pattern=r"^(v1|v2)$",
         description="Engine version: 'v1' (deterministic) or 'v2' (LLM-primary)",
+    )
+    custom_seed_ids: list[str] | None = Field(
+        default=None,
+        description=(
+            "Specific NPC IDs to use as initial seeds (from parent population). "
+            "Overrides seed_count in config. Only valid with parent_simulation_id."
+        ),
+    )
+    custom_population_ids: list[str] | None = Field(
+        default=None,
+        description=(
+            "Specific NPC IDs to include in the population (from parent population). "
+            "Overrides population_size in config. Must be a superset of custom_seed_ids. "
+            "Only valid with parent_simulation_id."
+        ),
     )
